@@ -32,8 +32,6 @@ optional arguments:
                         take screenshots of domains.                                            
   -r domains.txt, --redirects domains.txt                                                       
                         links getting redirected                                                
-  -e https://site/file.js, --endpoints https://site/file.js                                     
-                        extract endpoints from js files 
 
 ```
 
