@@ -28,14 +28,6 @@ else:
     if which("dnsx"):
         print(Fore.GREEN + "dnsx installed successfully")
 
-if which("aquatone"):
-    pass
-else:
-    filepath = os.path.abspath(os.getcwd())
-    commands("wget -O aquatone.zip https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip | sudo mv {}/aquatone /usr/local/bin".format(filepath))
-    if which("aquatone"):
-        print(Fore.GREEN + "aquatone installed successfully")
-
 if which("subfinder"):
     pass
 else:
