@@ -27,9 +27,7 @@ optional arguments:
   -d domain.com, --dns domain.com                                                               
                         scan for dns records                                                    
   -p domains.txt, --probe domains.txt                                                           
-                        probe domains.                                                          
-  -a domains.txt, --aquatone domains.txt                                                        
-                        take screenshots of domains.                                            
+                        probe domains.                                                                                                     
   -r domains.txt, --redirects domains.txt                                                       
                         links getting redirected                                                
 
@@ -44,5 +42,9 @@ sudo python3 spyhunt.py -s yahoo.com --save
 Scan for javascript files 
 ```
 sudo python3 spyhunt -j yahoo.com
+```
+Scan for dns records
+```
+sudo python3 spyhunt -d yahoo.com
 ```
 
