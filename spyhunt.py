@@ -61,17 +61,9 @@ parser.add_argument('-p', '--probe',
                     type=str, help='probe domains.',
                     metavar='domains.txt')
 
-parser.add_argument('-a', '--aquatone',
-                    type=str, help='take screenshots of domains.',
-                    metavar='domains.txt')
-
 parser.add_argument('-r', '--redirects',
                     type=str, help='links getting redirected',
                     metavar='domains.txt')
-
-parser.add_argument('-e', '--endpoints',
-                    type=str, help='extract endpoints from js files',
-                    metavar='https://site/file.js')
 
 
 
@@ -159,10 +151,6 @@ if args.redirects:
     else:
         commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")   
 
-if args.endpoints:
-    if args.save:
-        print(Fore.CYAN + "Saving output to endpoints.txt...")   
-        commands(f"")
 
  
 
