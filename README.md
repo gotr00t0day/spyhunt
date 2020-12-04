@@ -1,7 +1,7 @@
 
 # INSTALLATION
 
-```sh
+```bash
 
 git clone https://github.com/gotr00t0day/spyhunt.git
 
