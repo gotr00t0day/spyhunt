@@ -39,7 +39,7 @@ optional arguments:
 
 Scan for subdomains and save the output to a file.
 ```
-sudo python3 spyhunt.py -s yahoo.com --save 
+sudo python3 spyhunt.py -s yahoo.com --save filename.txt
 ```
 Scan for javascript files 
 ```
