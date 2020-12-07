@@ -20,7 +20,7 @@ usage: spyhunt.py [-h] [-sv SAVE] [-s domain.com] [-j domain.com] [-d domain.com
 
 optional arguments:
   -h, --help            show this help message and exit
-  -sv SAVE, --save SAVE
+  -sv filename.txt, --save filename.txt
                         save output to file
   -s domain.com         scan for subdomains
   -j domain.com         find javascript files
