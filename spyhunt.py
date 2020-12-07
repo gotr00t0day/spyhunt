@@ -42,7 +42,7 @@ def commands(cmd):
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
-group.add_argument('-sv', '--save', action='store_true',
+group.add_argument('-sv', '--save', action='store',
                    help="save output to file")
 
 parser.add_argument('-s',
@@ -61,6 +61,10 @@ parser.add_argument('-p', '--probe',
                     type=str, help='probe domains.',
                     metavar='domains.txt')
 
+parser.add_argument('-a', '--aquatone',
+                    type=str, help='take screenshots of domains.',
+                    metavar='domains.txt')
+
 parser.add_argument('-r', '--redirects',
                     type=str, help='links getting redirected',
                     metavar='domains.txt')
@@ -71,23 +75,23 @@ args = parser.parse_args()
 
 if args.s:
     if args.save:
-        print(Fore.CYAN + "Saving output to subdomains.txt...")
+        print(Fore.CYAN + "Saving output to {}...".format(args.save))
         cmd = f"subfinder -d {args.s}"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, err = p.communicate()
         out = out.decode()  
-        with open("subdomains.txt", "w") as subfinder:
+        with open(f"{args.save}", "w") as subfinder:
             subfinder.writelines(out)
-        if path.exists("subdomains.txt"):
+        if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists("subdomains.txt"):
+        if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
             sys.exit(1)
         cmd = f"./scripts/spotter.sh {args.s} | uniq | sort"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         spotterout, err = p.communicate()
         spotterout = spotterout.decode()
-        with open("subdomains.txt", "a") as spotter:
+        with open(f"{args.save}", "a") as spotter:
             spotter.writelines(spotterout)
         cmd = f"./scripts/certsh.sh {args.s} | uniq | sort"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -100,23 +104,24 @@ if args.s:
 
 if args.j:
     if args.save:
-        print(Fore.CYAN + "Saving output to javascript.txt...")
-        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | uniq | sort >> javascript.txt")
-        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew >> javascript.txt")
-        if path.exists("javascript.txt"):
+        print(Fore.CYAN + "Saving output to {}".format(args.save))
+        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | uniq | sort >> {args.save}")
+        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew >> {args.save}")
+        if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists("javascript.txt"):
+        if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | uniq | sort")
-        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")  
+        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
+        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
+
 
 if args.dns:
     if args.save:
-        print(Fore.CYAN + "Saving output to dnsinfo.txt...")
-        commands(f"cat {args.dns} | dnsx -silent -a -resp >> dnsinfo.txt")
-        commands(f"cat {args.dns} | dnsx -silent -ns -resp >> dnsinfo.txt")
-        commands(f"cat {args.dns} | dnsx -silent -cname -resp >> dnsinfo.txt")
+        print(Fore.CYAN + "Saving output to {}...".format(args.save))
+        commands(f"cat {args.dns} | dnsx -silent -a -resp >> {args.save}")
+        commands(f"cat {args.dns} | dnsx -silent -ns -resp >> {args.save}")
+        commands(f"cat {args.dns} | dnsx -silent -cname -resp >> {args.save}")
     else:
         print(Fore.CYAN + "Printing A records...\n")
         time.sleep(2)
@@ -131,25 +136,28 @@ if args.dns:
 
 if args.probe:
     if args.save:
-        print(Fore.CYAN + "Saving output to livesubdomains.txt...")
-        commands(f'cat {args.probe} | httprobe | anew >> livesubdomains.txt')
-        if path.exists("livesubdomains.txt"):
+        print(Fore.CYAN + "Saving output to {}...".format(args.save))
+        commands(f'cat {args.probe} | httprobe | anew >> {args.save}')
+        if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists("livesubdomains.txt"):
+        if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        commands(f'sudo cat {args.probe} | httprobe | anew')    
+        commands(f'sudo cat {args.probe} | httprobe | anew')  
+
+if args.aquatone:
+    commands(f"cat {args.aquatone} | aquatone")
 
 if args.redirects:
     if args.save:
-        print(Fore.CYAN + "Saving output to redirects.txt..")
+        print(Fore.CYAN + "Saving output to {}}..".format(args.save))
         commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> redirects.txt")
-        if path.exists("redirects.txt"):
+        if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists("redirects.txt"):
+        if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")   
+        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")  
 
 
  
