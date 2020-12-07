@@ -151,7 +151,7 @@ if args.aquatone:
 if args.redirects:
     if args.save:
         print(Fore.CYAN + "Saving output to {}}..".format(args.save))
-        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> redirects.txt")
+        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> {args.save}")
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
         if not path.exists(f"{args.save}"):
