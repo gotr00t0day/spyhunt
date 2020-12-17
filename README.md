@@ -14,9 +14,7 @@ sudo python3 install.py
 # USAGE 
 
 ```
-sudo python3 spyhunt.py -h
-
-usage: spyhunt.py [-h] [-sv SAVE] [-s domain.com] [-j domain.com] [-d domain.com] [-p domains.txt] [-a domains.txt] [-r domains.txt] [-b domains.txt]
+usage: spyhunt2.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com] [-d domain.com] [-p domains.txt] [-a domains.txt] [-r domains.txt] [-b domains.txt]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -24,6 +22,8 @@ optional arguments:
                         save output to file
   -s domain.com         scan for subdomains
   -j domain.com         find javascript files
+  -t domain.com, --tech domain.com
+                        find technologies
   -d domain.com, --dns domain.com
                         scan for dns records
   -p domains.txt, --probe domains.txt
@@ -31,8 +31,9 @@ optional arguments:
   -a domains.txt, --aquatone domains.txt
                         take screenshots of domains.
   -r domains.txt, --redirects domains.txt
-                        links getting redirected                                              
-
+                        links getting redirected
+  -b domains.txt, --brokenlinks domains.txt
+                        search for broken links                                          
 ```
 
 # EXAMPLE
