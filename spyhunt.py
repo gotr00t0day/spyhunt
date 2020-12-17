@@ -1,6 +1,7 @@
 from shutil import which
 from colorama import Fore, Back, Style
 from os import path
+from builtwith import builtwith
 import os.path
 import socket
 import subprocess
@@ -9,6 +10,7 @@ import socket
 import os
 import argparse
 import time
+import threading
 
 
 banner = """
@@ -22,11 +24,9 @@ banner = """
 ▒██████▒▒▒██▒ ░  ░ ░ ██▒▓░░▓█▒░██▓▒▒█████▓ ▒██░   ▓██░  ▒██▒ ░ 
 ▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░  ██▒▒▒  ▒ ░░▒░▒░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒   ▒ ░░   
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
-░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░  v 1.0 
+░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░  v 1.1
       ░           ░ ░      ░  ░  ░   ░              ░          
                   ░ ░          by c0deNinja
-
-
 
 """
 
@@ -43,7 +43,8 @@ parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
 group.add_argument('-sv', '--save', action='store',
-                   help="save output to file")
+                   help="save output to file",
+                   metavar="filename.txt")
 
 parser.add_argument('-s',
                     type=str, help='scan for subdomains',
@@ -52,6 +53,11 @@ parser.add_argument('-s',
 parser.add_argument('-j',
                     type=str, help='find javascript files',
                     metavar='domain.com')
+
+parser.add_argument('-t', '--tech',
+                    type=str, help='find technologies',
+                    metavar='domain.com')
+
 
 parser.add_argument('-d', '--dns',
                     type=str, help='scan for dns records',
@@ -69,7 +75,9 @@ parser.add_argument('-r', '--redirects',
                     type=str, help='links getting redirected',
                     metavar='domains.txt')
 
-
+parser.add_argument('-b', '--brokenlinks',
+                    type=str, help='search for broken links',
+                    metavar='domains.txt')
 
 args = parser.parse_args()
 
@@ -115,7 +123,6 @@ if args.j:
         commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
         commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
 
-
 if args.dns:
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
@@ -131,8 +138,7 @@ if args.dns:
         commands(f"cat {args.dns} | dnsx -silent -ns -resp\n")
         print(Fore.CYAN + "Printing CNAME records...\n")
         time.sleep(2)
-        commands(f"cat {args.dns} | dnsx -silent -cname -resp\n")     
-        
+        commands(f"cat {args.dns} | dnsx -silent -cname -resp\n")            
 
 if args.probe:
     if args.save:
@@ -143,24 +149,46 @@ if args.probe:
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        commands(f'sudo cat {args.probe} | httprobe | anew')  
+        commands(f'sudo cat {args.probe} | httprobe | anew')    
 
-if args.aquatone:
-    commands(f"cat {args.aquatone} | aquatone")
 
 if args.redirects:
     if args.save:
         print(Fore.CYAN + "Saving output to {}}..".format(args.save))
-        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> {args.save}")
+        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> redirects.txt")
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")  
+        commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")   
 
 
- 
+if args.aquatone:
+    if path.exists("aquatone"):
+        pass
+    if not path.exists("aquatone"):
+        commands("mkdir aquatone")
+    commands(f"cat {args.aquatone} | aquatone")
 
 
+if args.brokenlinks:
+    if args.save:
+        print(Fore.CYAN + "Saving output to {}".format(args.save))
+        commands(f"blc -r --filter-level 2 {args.brokenlinks}")
+        if path.exists(f"{args.save}"):
+            print(Fore.CYAN + "DONE!")
+        if not path.exists(f"{args.save}"):
+            print(Fore.CYAN + "ERROR!")
+    else:
+        commands(f"blc -r --filter-level 2 {args.brokenlinks}")
 
+if args.tech:
+    try:
+        print("\n")
+        print (Fore.CYAN + "Scanning..." + "\n")
+        info = builtwith(f"{args.tech}")
+        for framework, tech in info.items():
+            print (Fore.GREEN + framework, ":", tech)
+    except UnicodeDecodeError:
+        pass
