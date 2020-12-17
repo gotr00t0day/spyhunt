@@ -19,6 +19,19 @@ commands("sudo pip3 install colorama")
 
 commands("sudo apt install golang")
 
+# nodejs
+
+commands("sudo apt install nodejs")
+
+# npm
+commands("sudo apt install npm")
+
+# brokenlinkchecker
+if which("nodejs"):
+    print(Fore.GREEN + "Found nodejs")
+if which("npm"):
+    print(Fore.GREEN + "Found npm")
+
 
 if which("dnsx"):
     pass
@@ -27,6 +40,14 @@ else:
     commands("GO111MODULE=on go get -u -v github.com/projectdiscovery/dnsx/cmd/dnsx | cd {}/go/bin | sudo mv {}/go/bin/dnsx /usr/local/bin".format(home, home))
     if which("dnsx"):
         print(Fore.GREEN + "dnsx installed successfully")
+
+if which("aquatone"):
+    pass
+else:
+    filepath = os.path.abspath(os.getcwd())
+    commands("wget -O aquatone.zip https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip | sudo mv {}/aquatone /usr/local/bin".format(filepath))
+    if which("aquatone"):
+        print(Fore.GREEN + "aquatone installed successfully")
 
 if which("subfinder"):
     pass
