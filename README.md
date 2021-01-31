@@ -14,7 +14,7 @@ sudo python3 install.py
 # USAGE 
 
 ```
-usage: spyhunt2.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com] [-d domain.com] [-p domains.txt] [-a domains.txt] [-r domains.txt] [-b domains.txt]
+usage: spyhunt.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com] [-d domain.com] [-p domains.txt] [-a domains.txt] [-r domains.txt] [-b domains.txt]
 
 optional arguments:
   -h, --help            show this help message and exit
