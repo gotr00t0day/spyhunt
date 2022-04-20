@@ -1,3 +1,5 @@
 builtwith
 colorama
 requests
+mmh3
+codecs
