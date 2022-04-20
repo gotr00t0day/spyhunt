@@ -7,6 +7,8 @@ git clone https://github.com/gotr00t0day/spyhunt.git
 
 cd spyhunt
 
+pip3 install -r requirements.txt
+
 sudo python3 install.py
 
 ```
