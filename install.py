@@ -101,3 +101,10 @@ else:
     commands("GO111MODULE=on go get -u -v github.com/lc/gau | cd {}/go/bin | sudo mv {}/go/bin/gau /usr/local/bin".format(home, home))
     if which("gau"):
         print(Fore.GREEN + "gau installed successfully")
+
+if which("shodan"):
+    pass
+else:
+    commands("easy_install shodan")
+    if which("shodan"):
+        print(Fore.GREEN + "shodan installed successfully")

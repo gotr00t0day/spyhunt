@@ -1,2 +1,4 @@
 builtwith
 colorama
+requests
+shodan

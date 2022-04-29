@@ -1,7 +1,9 @@
 from shutil import which
+from shodan import Shodan
 from colorama import Fore, Back, Style
 from os import path
 from builtwith import builtwith
+from modules.favicon import *
 import os.path
 import socket
 import subprocess
@@ -11,26 +13,29 @@ import os
 import argparse
 import time
 import threading
+import codecs
+import requests
+import mmh3
+import urllib3
+import random
 
+requests.packages.urllib3.disable_warnings()
 
 banner = """
 
 
-
-  ██████  ██▓███ ▓██   ██▓ ██░ ██  █    ██  ███▄    █ ▄▄▄█████▓
-▒██    ▒ ▓██░  ██▒▒██  ██▒▓██░ ██▒ ██  ▓██▒ ██ ▀█   █ ▓  ██▒ ▓▒
-░ ▓██▄   ▓██░ ██▓▒ ▒██ ██░▒██▀▀██░▓██  ▒██░▓██  ▀█ ██▒▒ ▓██░ ▒░
-  ▒   ██▒▒██▄█▓▒ ▒ ░ ▐██▓░░▓█ ░██ ▓▓█  ░██░▓██▒  ▐▌██▒░ ▓██▓ ░ 
-▒██████▒▒▒██▒ ░  ░ ░ ██▒▓░░▓█▒░██▓▒▒█████▓ ▒██░   ▓██░  ▒██▒ ░ 
-▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░  ██▒▒▒  ▒ ░░▒░▒░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒   ▒ ░░   
-░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
-░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░  v 1.1
-      ░           ░ ░      ░  ░  ░   ░              ░          
-                  ░ ░          by c0deNinja
+███████╗██████╗ ██╗   ██╗██╗  ██╗██╗   ██╗███╗   ██╗████████╗
+██╔════╝██╔══██╗╚██╗ ██╔╝██║  ██║██║   ██║████╗  ██║╚══██╔══╝
+███████╗██████╔╝ ╚████╔╝ ███████║██║   ██║██╔██╗ ██║   ██║   
+╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
+███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
+╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
+V 1.2
+By c0deninja
 
 """
 
-print(Fore.RED + banner)
+print(Fore.CYAN + banner)
 print(Fore.WHITE)
 
 def commands(cmd):
@@ -48,6 +53,18 @@ group.add_argument('-sv', '--save', action='store',
 
 parser.add_argument('-s',
                     type=str, help='scan for subdomains',
+                    metavar='domain.com')
+
+parser.add_argument('-ri', '--reverseip',
+                    type=str, help='reverse ip lookup',
+                    metavar='IP')
+
+parser.add_argument('-rim', '--reverseipmulti',
+                    type=str, help='reverse ip lookup for multiple ips',
+                    metavar='IP')
+
+parser.add_argument('-sc', '--statuscode',
+                    type=str, help='statuscode',
                     metavar='domain.com')
 
 parser.add_argument('-j',
@@ -79,7 +96,34 @@ parser.add_argument('-b', '--brokenlinks',
                     type=str, help='search for broken links',
                     metavar='domains.txt')
 
+parser.add_argument('-w', '--waybackurls',
+                    type=str, help='scan for waybackurls',
+                    metavar='https://domain.com')
+
+parser.add_argument('-wc', '--webcrawler',
+                    type=str, help='scan for urls and js files',
+                    metavar='https://domain.com')
+
+parser.add_argument('-fi', '--favicon',
+                    type=str, help='get favicon hashes',
+                    metavar='https://domain.com')
+
+parser.add_argument('-fm', '--faviconmulti',
+                    type=str, help='get favicon hashes',
+                    metavar='https://domain.com')
+
+parser.add_argument('-na', '--networkanalyzer',
+                    type=str, help='get favicon hashes',
+                    metavar='https://domain.com')
+
+parser.add_argument('-co', '--corsmisconfig',
+                    type=str, help='get favicon hashes',
+                    metavar='https://domain.com')
+
+
 args = parser.parse_args()
+
+
 
 if args.s:
     if args.save:
@@ -109,6 +153,116 @@ if args.s:
         commands(f"subfinder -d {args.s}")
         commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
         commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
+
+if args.reverseip:
+    domain = socket.gethostbyaddr(args.reverseip)
+    print(f"{Fore.CYAN}Domain: {Fore.GREEN} {domain[0]}")
+
+if args.reverseipmulti:
+    try:
+        with open(f"{args.reverseipmulti}") as f:
+            ipadd = [x.strip() for x in f.readlines()]
+            for ips in ipadd:
+                print(f"{socket.gethostbyaddr(ips)}\n")
+    except socket.herror:
+        pass
+    except FileNotFoundError:
+        print(f"{Fore.RED} File not found!")
+
+
+if args.webcrawler:
+    if args.save:
+        print(Fore.CYAN + f"Saving output to {args.save}")
+        commands(f"echo {args.webcrawler} | hakrawler >> {args.save}")
+    else:
+        commands(f"echo {args.webcrawler} | hakrawler")
+
+
+if args.statuscode:
+    commands(f"echo '{args.statuscode}' | httpx -silent -status-code")
+
+if args.favicon:
+        response = requests.get(f'{args.favicon}/favicon.ico', verify=False)
+        favicon = codecs.encode(response.content,"base64")
+        hash = mmh3.hash(favicon)
+        print(hash)
+
+if args.faviconmulti:
+
+    print(f"{Fore.MAGENTA}\t\t\t FavIcon Hashes\n")
+    with open(f"{args.faviconmulti}") as f:
+        domains = [x.strip() for x in f.readlines()]
+        try:
+            for domainlist in domains:
+                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=60)
+                if response.status_code == 200:
+                    favicon = codecs.encode(response.content,"base64")
+                    hash = mmh3.hash(favicon)
+                    hashes = {}
+                    if "https" in domainlist:
+                        domainlist = domainlist.replace("https://", "")
+                    if "http" in domainlist:
+                        domainlist = domainlist.replace("http://", "")
+                    ip = socket.gethostbyname(domainlist)
+                    if hash == "0":
+                        pass
+                    for value, item in fingerprint.items():
+                        if hash == value:
+                            hashes[hash].append(item)
+                            print(f"{Fore.WHITE}{domainlist} {Fore.MAGENTA}: {Fore.CYAN}[{hash}] {Fore.GREEN}[{ip}]{Fore.YELLOW} [{item}]")  
+                    print(f"{Fore.WHITE}{domainlist} {Fore.MAGENTA}: {Fore.CYAN}[{hash}] {Fore.GREEN}[{ip}]{Fore.YELLOW}")
+                    for v,i in hashes.items():
+                        print(f"{Fore.MAGENTA}Servers Found")
+                        print()
+                        print(f"{v}:{i}")
+                else:
+                    pass
+        except TimeoutError:
+            pass
+        except requests.exceptions.ConnectionError:
+            pass
+        except urllib3.exceptions.ProtocolError:
+            pass
+        except requests.exceptions.ReadTimeout:
+            pass
+
+if args.corsmisconfig:
+    print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
+    with open(f"{args.corsmisconfig}") as f:
+        domains = [x.strip() for x in f.readlines()]
+        payload = "https://wwwwuups.com"
+        header = {'Origin': f'{payload}'}
+        try:
+            for domainlist in domains:
+                session = requests.Session()
+                session.max_redirects = 10
+                resp = session.get(f"{domainlist}", verify=False, headers=header)
+                for value, key in resp.headers.items():
+                    if value == "Access-Control-Allow-Origin":
+                        AllowOrigin = key
+                        if AllowOrigin == f"{payload}":
+                            print(f"{Fore.CYAN}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOAD: {Fore.MAGENTA}{payload}")
+        except requests.exceptions.TooManyRedirects:
+            pass
+
+
+
+if args.networkanalyzer:
+    print(f"{Fore.MAGENTA}\t\t Analyzing Network Vulnerabilities \n")
+    print(f"{Fore.CYAN}IP Range: {Fore.GREEN}{args.networkanalyzer}\n")
+    print(f"{Fore.WHITE}")
+    commands(f"shodan stats --facets port net:{args.networkanalyzer}")
+    commands(f"shodan stats --facets vuln net:{args.networkanalyzer}")
+
+
+
+if args.waybackurls:
+    if args.save:
+        print(Fore.CYAN + f"Saving output to {args.save}")
+        commands(f"waybackurls {args.waybackurls} | anew >> {args.save}")
+        print(Fore.GREEN + "DONE!")
+    else:
+        commands(f"waybackurls {args.waybackurls}")
 
 if args.j:
     if args.save:
