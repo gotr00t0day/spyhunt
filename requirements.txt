@@ -1,4 +1,9 @@
 builtwith
 colorama
 requests
+<<<<<<< HEAD
 shodan
+=======
+mmh3
+codecs
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414

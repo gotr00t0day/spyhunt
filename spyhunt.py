@@ -2,6 +2,7 @@ from shutil import which
 from shodan import Shodan
 from colorama import Fore, Back, Style
 from os import path
+
 from builtwith import builtwith
 from modules.favicon import *
 import os.path
@@ -17,7 +18,10 @@ import codecs
 import requests
 import mmh3
 import urllib3
+<<<<<<< HEAD
 import random
+=======
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 requests.packages.urllib3.disable_warnings()
 
@@ -112,6 +116,7 @@ parser.add_argument('-fm', '--faviconmulti',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
+<<<<<<< HEAD
 parser.add_argument('-na', '--networkanalyzer',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
@@ -120,6 +125,8 @@ parser.add_argument('-co', '--corsmisconfig',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
+=======
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 args = parser.parse_args()
 
@@ -188,17 +195,27 @@ if args.favicon:
         print(hash)
 
 if args.faviconmulti:
+<<<<<<< HEAD
 
+=======
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
     print(f"{Fore.MAGENTA}\t\t\t FavIcon Hashes\n")
     with open(f"{args.faviconmulti}") as f:
         domains = [x.strip() for x in f.readlines()]
         try:
             for domainlist in domains:
+<<<<<<< HEAD
                 response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=60)
                 if response.status_code == 200:
                     favicon = codecs.encode(response.content,"base64")
                     hash = mmh3.hash(favicon)
                     hashes = {}
+=======
+                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=5)
+                if response.status_code == 200:
+                    favicon = codecs.encode(response.content,"base64")
+                    hash = mmh3.hash(favicon)
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
                     if "https" in domainlist:
                         domainlist = domainlist.replace("https://", "")
                     if "http" in domainlist:
@@ -206,6 +223,7 @@ if args.faviconmulti:
                     ip = socket.gethostbyname(domainlist)
                     if hash == "0":
                         pass
+<<<<<<< HEAD
                     for value, item in fingerprint.items():
                         if hash == value:
                             hashes[hash].append(item)
@@ -215,6 +233,10 @@ if args.faviconmulti:
                         print(f"{Fore.MAGENTA}Servers Found")
                         print()
                         print(f"{v}:{i}")
+=======
+                    else:
+                        print(f"{Fore.WHITE}{domainlist} {Fore.MAGENTA}: {Fore.CYAN}{hash} {Fore.GREEN}{ip}")
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
                 else:
                     pass
         except TimeoutError:
@@ -226,6 +248,7 @@ if args.faviconmulti:
         except requests.exceptions.ReadTimeout:
             pass
 
+<<<<<<< HEAD
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
     with open(f"{args.corsmisconfig}") as f:
@@ -255,6 +278,8 @@ if args.networkanalyzer:
     commands(f"shodan stats --facets vuln net:{args.networkanalyzer}")
 
 
+=======
+>>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 if args.waybackurls:
     if args.save:
