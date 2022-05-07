@@ -49,7 +49,7 @@ optional arguments:
   -fm https://domain.com, --faviconmulti https://domain.com
                         get favicon hashes
   -na https://domain.com, --networkanalyzer https://domain.com
-                        get favicon hashes
+                        network analyzer
   -ri IP, --reverseip IP
                         reverse ip lookup
   -rim IP, --reverseipmulti IP
@@ -57,7 +57,7 @@ optional arguments:
   -sc domain.com, --statuscode domain.com
                         statuscode
   -co https://domain.com, --corsmisconfig https://domain.com
-                        get favicon hashes                                      
+                        cors misconfiguration vuln scanner                                 
 ```
 
 # EXAMPLE
