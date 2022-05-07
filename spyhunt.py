@@ -2,7 +2,6 @@ from shutil import which
 from shodan import Shodan
 from colorama import Fore, Back, Style
 from os import path
-
 from builtwith import builtwith
 from modules.favicon import *
 import os.path
@@ -18,10 +17,7 @@ import codecs
 import requests
 import mmh3
 import urllib3
-<<<<<<< HEAD
 import random
-=======
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 requests.packages.urllib3.disable_warnings()
 
@@ -57,18 +53,6 @@ group.add_argument('-sv', '--save', action='store',
 
 parser.add_argument('-s',
                     type=str, help='scan for subdomains',
-                    metavar='domain.com')
-
-parser.add_argument('-ri', '--reverseip',
-                    type=str, help='reverse ip lookup',
-                    metavar='IP')
-
-parser.add_argument('-rim', '--reverseipmulti',
-                    type=str, help='reverse ip lookup for multiple ips',
-                    metavar='IP')
-
-parser.add_argument('-sc', '--statuscode',
-                    type=str, help='statuscode',
                     metavar='domain.com')
 
 parser.add_argument('-j',
@@ -116,17 +100,26 @@ parser.add_argument('-fm', '--faviconmulti',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
-<<<<<<< HEAD
 parser.add_argument('-na', '--networkanalyzer',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
+
+parser.add_argument('-ri', '--reverseip',
+                    type=str, help='reverse ip lookup',
+                    metavar='IP')
+
+parser.add_argument('-rim', '--reverseipmulti',
+                    type=str, help='reverse ip lookup for multiple ips',
+                    metavar='IP')
+
+parser.add_argument('-sc', '--statuscode',
+                    type=str, help='statuscode',
+                    metavar='domain.com')
 
 parser.add_argument('-co', '--corsmisconfig',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
-=======
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 args = parser.parse_args()
 
@@ -195,27 +188,17 @@ if args.favicon:
         print(hash)
 
 if args.faviconmulti:
-<<<<<<< HEAD
 
-=======
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
     print(f"{Fore.MAGENTA}\t\t\t FavIcon Hashes\n")
     with open(f"{args.faviconmulti}") as f:
         domains = [x.strip() for x in f.readlines()]
         try:
             for domainlist in domains:
-<<<<<<< HEAD
                 response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=60)
                 if response.status_code == 200:
                     favicon = codecs.encode(response.content,"base64")
                     hash = mmh3.hash(favicon)
                     hashes = {}
-=======
-                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=5)
-                if response.status_code == 200:
-                    favicon = codecs.encode(response.content,"base64")
-                    hash = mmh3.hash(favicon)
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
                     if "https" in domainlist:
                         domainlist = domainlist.replace("https://", "")
                     if "http" in domainlist:
@@ -223,7 +206,6 @@ if args.faviconmulti:
                     ip = socket.gethostbyname(domainlist)
                     if hash == "0":
                         pass
-<<<<<<< HEAD
                     for value, item in fingerprint.items():
                         if hash == value:
                             hashes[hash].append(item)
@@ -233,10 +215,6 @@ if args.faviconmulti:
                         print(f"{Fore.MAGENTA}Servers Found")
                         print()
                         print(f"{v}:{i}")
-=======
-                    else:
-                        print(f"{Fore.WHITE}{domainlist} {Fore.MAGENTA}: {Fore.CYAN}{hash} {Fore.GREEN}{ip}")
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
                 else:
                     pass
         except TimeoutError:
@@ -248,15 +226,26 @@ if args.faviconmulti:
         except requests.exceptions.ReadTimeout:
             pass
 
-<<<<<<< HEAD
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
     with open(f"{args.corsmisconfig}") as f:
         domains = [x.strip() for x in f.readlines()]
-        payload = "https://wwwwuups.com"
-        header = {'Origin': f'{payload}'}
         try:
             for domainlist in domains:
+                for pos, web in enumerate(domainlist):
+                    if pos == 0:
+                        original_payload = []
+                        payload = []
+                        remove_com = domainlist.replace(".com", "")
+                        payload.append(f"{remove_com}evil.com")
+                        payload.append("evil.com")
+                        header = {'Origin': f"{payload}"}
+                    else:
+                        pass
+                for i in payload:
+                    if not i in original_payload:
+                        original_payload.append(i)
+                original_payload2 = ", ".join(original_payload)
                 session = requests.Session()
                 session.max_redirects = 10
                 resp = session.get(f"{domainlist}", verify=False, headers=header)
@@ -264,8 +253,11 @@ if args.corsmisconfig:
                     if value == "Access-Control-Allow-Origin":
                         AllowOrigin = key
                         if AllowOrigin == f"{payload}":
-                            print(f"{Fore.CYAN}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOAD: {Fore.MAGENTA}{payload}")
+                            print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
+                print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN} {domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
         except requests.exceptions.TooManyRedirects:
+            pass
+        except requests.exceptions.ConnectionError:
             pass
 
 
@@ -278,8 +270,6 @@ if args.networkanalyzer:
     commands(f"shodan stats --facets vuln net:{args.networkanalyzer}")
 
 
-=======
->>>>>>> 0d4c52a89db25db91486ef950d63020afac73414
 
 if args.waybackurls:
     if args.save:
