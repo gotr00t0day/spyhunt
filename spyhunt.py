@@ -120,10 +120,6 @@ parser.add_argument('-co', '--corsmisconfig',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
 args = parser.parse_args()
 
 
