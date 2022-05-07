@@ -120,7 +120,10 @@ parser.add_argument('-co', '--corsmisconfig',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
 args = parser.parse_args()
 
 
@@ -188,7 +191,10 @@ if args.favicon:
         print(hash)
 
 if args.faviconmulti:
+<<<<<<< HEAD
 
+=======
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
     print(f"{Fore.MAGENTA}\t\t\t FavIcon Hashes\n")
     with open(f"{args.faviconmulti}") as f:
         domains = [x.strip() for x in f.readlines()]
@@ -199,6 +205,13 @@ if args.faviconmulti:
                     favicon = codecs.encode(response.content,"base64")
                     hash = mmh3.hash(favicon)
                     hashes = {}
+<<<<<<< HEAD
+=======
+                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=5)
+                if response.status_code == 200:
+                    favicon = codecs.encode(response.content,"base64")
+                    hash = mmh3.hash(favicon)
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
                     if "https" in domainlist:
                         domainlist = domainlist.replace("https://", "")
                     if "http" in domainlist:
@@ -215,6 +228,11 @@ if args.faviconmulti:
                         print(f"{Fore.MAGENTA}Servers Found")
                         print()
                         print(f"{v}:{i}")
+<<<<<<< HEAD
+=======
+                    else:
+                        print(f"{Fore.WHITE}{domainlist} {Fore.MAGENTA}: {Fore.CYAN}{hash} {Fore.GREEN}{ip}")
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
                 else:
                     pass
         except TimeoutError:
@@ -226,6 +244,10 @@ if args.faviconmulti:
         except requests.exceptions.ReadTimeout:
             pass
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
     with open(f"{args.corsmisconfig}") as f:
@@ -270,7 +292,10 @@ if args.networkanalyzer:
     commands(f"shodan stats --facets vuln net:{args.networkanalyzer}")
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 4d4fcb626996b91e96057227f43a54891a52b4ca
 if args.waybackurls:
     if args.save:
         print(Fore.CYAN + f"Saving output to {args.save}")
