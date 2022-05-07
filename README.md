@@ -16,22 +16,17 @@ sudo python3 install.py
 # USAGE 
 
 ```
-usage: spyhunt.py [-h] [-sv filename.txt] [-s domain.com] [-ri IP] [-rim IP] [-sc domain.com]
-                  [-j domain.com] [-t domain.com] [-d domain.com] [-p domains.txt]
-                  [-a domains.txt] [-r domains.txt] [-b domains.txt] [-w https://domain.com]
-                  [-wc https://domain.com] [-fi https://domain.com] [-fm https://domain.com]
+usage: spyhunt.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com]
+                  [-d domain.com] [-p domains.txt] [-a domains.txt] [-r domains.txt]
+                  [-b domains.txt] [-w https://domain.com] [-wc https://domain.com]
+                  [-fi https://domain.com] [-fm https://domain.com] [-na https://domain.com]
+                  [-ri IP] [-rim IP] [-sc domain.com] [-co https://domain.com]
 
 optional arguments:
   -h, --help            show this help message and exit
   -sv filename.txt, --save filename.txt
                         save output to file
   -s domain.com         scan for subdomains
-  -ri IP, --reverseip IP
-                        reverse ip lookup
-  -rim IP, --reverseipmulti IP
-                        reverse ip lookup for multiple ips
-  -sc domain.com, --statuscode domain.com
-                        statuscode
   -j domain.com         find javascript files
   -t domain.com, --tech domain.com
                         find technologies
@@ -49,10 +44,20 @@ optional arguments:
                         scan for waybackurls
   -wc https://domain.com, --webcrawler https://domain.com
                         scan for urls and js files
-  -fi https://domain.com, --favicon domain.com
+  -fi https://domain.com, --favicon https://domain.com
                         get favicon hashes
-  -fm https://domain.com, --faviconmulti domains.txt
-                        get favicon hashes                                       
+  -fm https://domain.com, --faviconmulti https://domain.com
+                        get favicon hashes
+  -na https://domain.com, --networkanalyzer https://domain.com
+                        get favicon hashes
+  -ri IP, --reverseip IP
+                        reverse ip lookup
+  -rim IP, --reverseipmulti IP
+                        reverse ip lookup for multiple ips
+  -sc domain.com, --statuscode domain.com
+                        statuscode
+  -co https://domain.com, --corsmisconfig https://domain.com
+                        get favicon hashes                                      
 ```
 
 # EXAMPLE
