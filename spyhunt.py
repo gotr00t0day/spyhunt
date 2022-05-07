@@ -233,7 +233,7 @@ if args.faviconmulti:
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
     with open(f"{args.corsmisconfig}") as f:
-        domains = [x.strip() for x in f.readlines()]
+        domains = (x.strip() for x in f.readlines())
         try:
             for domainlist in domains:
                 for pos, web in enumerate(domainlist):
@@ -246,9 +246,7 @@ if args.corsmisconfig:
                         header = {'Origin': f"{payload}"}
                     else:
                         pass
-                for i in payload:
-                    if not i in original_payload:
-                        original_payload.append(i)
+                [original_payload.append(i) for i in payload if i not in original_payload]
                 original_payload2 = ", ".join(original_payload)
                 session = requests.Session()
                 session.max_redirects = 10
@@ -257,8 +255,8 @@ if args.corsmisconfig:
                     if value == "Access-Control-Allow-Origin":
                         AllowOrigin = key
                         if AllowOrigin == f"{payload}":
-                            print(f"{Fore.CYAN}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
-                print(f"{Fore.YELLOW}NOT VULNERABLE: {Fore.GREEN} {domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
+                            print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
+                print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN} {domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
         except requests.exceptions.TooManyRedirects:
             pass
         except requests.exceptions.ConnectionError:
