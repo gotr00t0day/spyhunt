@@ -257,7 +257,7 @@ if args.corsmisconfig:
                     if value == "Access-Control-Allow-Origin":
                         AllowOrigin = key
                         if AllowOrigin == f"{payload}":
-                            print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
+                            print(f"{Fore.CYAN}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
                 print(f"{Fore.YELLOW}NOT VULNERABLE: {Fore.GREEN} {domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
         except requests.exceptions.TooManyRedirects:
             pass
