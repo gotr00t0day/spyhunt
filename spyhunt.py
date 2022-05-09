@@ -120,6 +120,10 @@ parser.add_argument('-co', '--corsmisconfig',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
+parser.add_argument('-hh', '--hostheaderinjection',
+                    type=str, help='host header injection',
+                    metavar='domains.txt')
+
 args = parser.parse_args()
 
 
@@ -262,6 +266,35 @@ if args.corsmisconfig:
         except requests.exceptions.ConnectionError:
             pass
 
+if args.hostheaderinjection:
+    print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
+    redirect = ["301", "302", "303", "307", "308"]
+    with open(f"{args.hostheaderinjection}") as f:
+        domains = [x.strip() for x in f.readlines()]
+        payload = b"evil.com"
+        vuln_domain = []
+        duplicates_none = []     
+        try:
+            for domainlist in domains:
+                session = requests.Session()
+                header = {"X-Forwarded-Host": "evil.com"}
+                header2 = {"Host": "evil.com"}
+                resp = session.get(f"{domainlist}", verify=False, headers=header)
+                resp2 = session.get(f"{domainlist}", verify=False, headers=header2)
+                resp_content = resp.content
+                resp_status = resp.status_code
+                resp2_content = resp2.content
+                for value, key in resp.headers.items():
+                    if value == "Location" and key == payload and resp.status_code in redirect:
+                        vuln_domain.append(domainlist)
+                    if payload in resp_content or payload in resp2_content or key == payload:
+                        vuln_domain.append(domainlist)
+                if vuln_domain:
+                    print(f"{Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {vuln_domain}")
+                [duplicates_none.append(x) for x in vuln_domain if x not in duplicates_none]
+                print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
+        except requests.exceptions.TooManyRedirects:
+            pass
 
 
 if args.networkanalyzer:
