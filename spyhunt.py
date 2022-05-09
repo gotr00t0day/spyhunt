@@ -269,7 +269,7 @@ if args.corsmisconfig:
 
 if args.hostheaderinjection:
     print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
-    redirect = ["302", "303", "307", "308"]
+    redirect = ["301", "302", "303", "307", "308"]
     with open(f"{args.hostheaderinjection}") as f:
         domains = [x.strip() for x in f.readlines()]
         payload = b"evil.com"
