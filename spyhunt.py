@@ -1,7 +1,7 @@
 from shutil import which
 from shodan import Shodan
 from colorama import Fore, Back, Style
-from os import path
+from os import path, mkdir
 from builtwith import builtwith
 from modules.favicon import *
 import os.path
@@ -17,7 +17,8 @@ import codecs
 import requests
 import mmh3
 import urllib3
-import random
+import httpx
+import asyncio
 
 requests.packages.urllib3.disable_warnings()
 
@@ -30,7 +31,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.2
+V 1.3
 By c0deninja
 
 """
@@ -101,7 +102,7 @@ parser.add_argument('-fm', '--faviconmulti',
                     metavar='https://domain.com')
 
 parser.add_argument('-na', '--networkanalyzer',
-                    type=str, help='get favicon hashes',
+                    type=str, help='net analyzer',
                     metavar='https://domain.com')
 
 parser.add_argument('-ri', '--reverseip',
@@ -117,12 +118,31 @@ parser.add_argument('-sc', '--statuscode',
                     metavar='domain.com')
 
 parser.add_argument('-co', '--corsmisconfig',
-                    type=str, help='get favicon hashes',
-                    metavar='https://domain.com')
+                    type=str, help='cors misconfiguration',
+                    metavar='domains.txt')
 
 parser.add_argument('-hh', '--hostheaderinjection',
                     type=str, help='host header injection',
-                    metavar='domains.txt')
+                    metavar='domain.com')
+
+parser.add_argument('-sh', '--securityheaders',
+                    type=str, help='scan for security headers',
+                    metavar='domain.com')
+
+parser.add_argument('-ed', '--enumeratedomain',
+                    type=str, help='enumerate domains',
+                    metavar='domain.com')
+
+parser.add_argument('-smu', '--smuggler',
+                    type=str, help='enumerate domains',
+                    metavar='domain.com')
+parser.add_argument('-rd', '--redirect',
+                    type=str, help='get redirect links',
+                    metavar='domain list')
+parser.add_argument('-hx', '--httpx',
+                    type=str, help='get http information',
+                    metavar='domain list')
+
 
 args = parser.parse_args()
 
@@ -152,8 +172,11 @@ if args.s:
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         certshout, err = p.communicate()
         certshout = certshout.decode()
+        with open(f"{args.save}", "a") as certsh:
+            certsh.writelines(certshout)
     else:
         commands(f"subfinder -d {args.s}")
+        commands(f"./tools/assetfinder -subs-only {args.s} | uniq | sort")
         commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
         commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
 
@@ -189,6 +212,24 @@ if args.favicon:
         favicon = codecs.encode(response.content,"base64")
         hash = mmh3.hash(favicon)
         print(hash)
+
+if args.enumeratedomain:
+    server = []
+    r = requests.get(f"{args.enumeratedomain}", verify=False) 
+    domain = args.enumeratedomain
+    if "https://" in domain:
+        domain = domain.replace("https://", "")
+    if "http://" in domain:
+        domain = domain.replace("http://", "")
+    ip = socket.gethostbyname(domain)
+    for value, key in r.headers.items():
+        if value == "Server" or value == "server":
+            server.append(key)
+    if server:
+        print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}] {Fore.WHITE}Server:{Fore.GREEN} {server}")
+    else:
+        print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}]")
+    
 
 if args.faviconmulti:
     print(f"{Fore.MAGENTA}\t\t\t FavIcon Hashes\n")
@@ -271,30 +312,72 @@ if args.hostheaderinjection:
     redirect = ["301", "302", "303", "307", "308"]
     with open(f"{args.hostheaderinjection}") as f:
         domains = [x.strip() for x in f.readlines()]
-        payload = b"evil.com"
-        vuln_domain = []
-        duplicates_none = []     
+        payload = b"google.com" 
+        print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
         try:
             for domainlist in domains:
                 session = requests.Session()
-                header = {"X-Forwarded-Host": "evil.com"}
-                header2 = {"Host": "evil.com"}
+                header = {"X-Forwarded-Host": "google.com"}
+                header2 = {"Host": "google.com"}
                 resp = session.get(f"{domainlist}", verify=False, headers=header)
                 resp2 = session.get(f"{domainlist}", verify=False, headers=header2)
                 resp_content = resp.content
                 resp_status = resp.status_code
                 resp2_content = resp2.content
                 for value, key in resp.headers.items():
-                    if value == "Location" and key == payload and resp.status_code in redirect:
-                        vuln_domain.append(domainlist)
-                    if payload in resp_content or payload in resp2_content or key == payload:
-                        vuln_domain.append(domainlist)
+                    for pos, web in enumerate(domainlist):
+                        if pos == 0:
+                            vuln_domain = []
+                            duplicates_none = []  
+                            if value == "Location" and key == payload and resp.status_code in redirect:
+                                vuln_domain.append(domainlist)
+                            if payload in resp_content or key == payload:
+                                vuln_domain.append(domainlist)
+                        else:
+                            pass
+                for value2, key2 in resp2.headers.items():
+                    for pos, web in enumerate(domainlist):
+                        if pos == 0:
+                            if payload in resp2_content or key == payload:
+                                vuln_domain.append(domainlist)
+                        else:
+                            pass
                 if vuln_domain:
-                    print(f"{Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {vuln_domain}")
-                [duplicates_none.append(x) for x in vuln_domain if x not in duplicates_none]
+                    [duplicates_none.append(x) for x in vuln_domain if x not in duplicates_none]
+                    duplicates_none = ", ".join(duplicates_none)
+                    print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
                 print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
         except requests.exceptions.TooManyRedirects:
             pass
+
+if args.securityheaders:
+    print(f"{Fore.MAGENTA}\t\t Security Headers\n")
+    security_headers = ["Strict-Transport-Security", "Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options", "X-XSS-Protection"]
+    session = requests.Session()
+    no_sec = []
+    found_hd = []
+    no_dup = []
+    no_dup_found = []
+    lower = [x.lower() for x in security_headers]
+    capital = [x.upper() for x in security_headers]
+    resp = session.get(f"{args.securityheaders}", verify=False)
+    print(f"{Fore.CYAN}Domain: {Fore.GREEN}{args.securityheaders}\n")
+    for item, key in resp.headers.items():
+        for sec_headers in security_headers:
+            if sec_headers  == item or lower == item or capital == item:
+                found_hd.append(sec_headers)
+                [no_dup_found.append(x) for x in found_hd if x not in no_dup_found]
+        print(f"{Fore.CYAN}{item}: {Fore.YELLOW}{key}")
+    no_dup = ", ".join(no_dup)
+    print(lower)
+    print("\n")
+    print(f"{Fore.GREEN} Found Security Headers: {Fore.YELLOW} {len(no_dup_found)}\n")
+    no_dup_found = ", ".join(no_dup_found)
+    print(f"{Fore.YELLOW} {no_dup_found}\n")
+    no_headers = [item for item in security_headers if item not in no_dup_found]
+    print(f"{Fore.RED} Found Missing headers: {Fore.YELLOW} {len(no_headers)}\n")
+    no_headers = ", ".join(no_headers)
+    print(f"{Fore.YELLOW} {no_headers}")
 
 
 if args.networkanalyzer:
@@ -395,3 +478,69 @@ if args.tech:
             print (Fore.GREEN + framework, ":", tech)
     except UnicodeDecodeError:
         pass
+
+if args.smuggler:
+    smug_path = os.path.abspath(os.getcwd())
+    commands(f"python3 {smug_path}/tools/smuggler/smuggler.py -u {args.smuggler} -q")
+
+if args.redirect:
+    user_agent = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/44.0.2403.155 Safari/537.36"
+    header = {'User Agent': f'{user_agent}'}
+    path = os.getcwd()
+    with open(f"{path}/{args.redirect}") as f:
+        domain_list = {x.strip() for x in f.readlines()}
+    for domainlist in domain_list:
+            r = requests.get(f"{domainlist}", verify=False, headers=header)
+            if r.status_code == 301 or r.status_code == 302:
+                print(f"{Fore.GREEN}{domainlist}")
+            else:
+                print(domainlist)
+
+if args.httpx:
+    user_agent_ = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/44.0.2403.155 Safari/537.36"
+    header = {"User-Agent": user_agent_}
+
+    async def get_responses(client, link_paths: str):
+        try:
+            r = await client.get(link_paths)
+            if r.status_code == 200:
+                print(f"{link_paths} - {Fore.GREEN}({r.status_code})({content_length})({server}){Fore.RESET}")
+            if r.status_code == 403:
+                print(f"{link_paths} - {Fore.RED}({r.status_code})({content_length})({server}){Fore.RESET}")
+            if r.status_code == 301:
+                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
+            if r.status_code == 302:
+                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
+            if r.status_code == 303:
+                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
+            else:
+                print(f"{link_paths} - ({r.status_code})({content_length})({server})")
+        except RuntimeError:
+            pass
+        except ValueError:
+            pass
+        except httpx.UnsupportedProtocol:
+            pass
+
+    async def main():
+        try:
+            async with httpx.AsyncClient() as client:
+                with open(f"{args.httpx}", "r") as f:
+                    subdomains = [x.strip() for x in f.readlines()]
+                task = []
+                for links in subdomains:
+                    task.append(asyncio.create_task(get_responses(client, links)))
+                await asyncio.gather(*task)
+                return task
+        except RuntimeError:
+            pass
+        except ValueError:
+            pass
+        
+    asyncio.run(main())    
+
+
+
+        
+
+
