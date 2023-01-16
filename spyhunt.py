@@ -4,6 +4,7 @@ from colorama import Fore, Back, Style
 from os import path, mkdir
 from builtwith import builtwith
 from modules.favicon import *
+from bs4 import BeautifulSoup
 import os.path
 import socket
 import subprocess
@@ -12,13 +13,13 @@ import socket
 import os
 import argparse
 import time
-import threading
 import codecs
 import requests
 import mmh3
 import urllib3
-import httpx
-import asyncio
+import warnings
+
+warnings.filterwarnings(action='ignore',module='bs4')
 
 requests.packages.urllib3.disable_warnings()
 
@@ -31,7 +32,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.3
+V 1.4
 By c0deninja
 
 """
@@ -136,11 +137,17 @@ parser.add_argument('-ed', '--enumeratedomain',
 parser.add_argument('-smu', '--smuggler',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
+
 parser.add_argument('-rd', '--redirect',
                     type=str, help='get redirect links',
                     metavar='domain list')
-parser.add_argument('-hx', '--httpx',
-                    type=str, help='get http information',
+
+parser.add_argument('-ips', '--ipaddresses',
+                    type=str, help='get the ips from a list of domains',
+                    metavar='domain list')
+
+parser.add_argument('-dinfo', '--domaininfo',
+                    type=str, help='get domain information like codes,server,content length',
                     metavar='domain list')
 
 
@@ -273,6 +280,8 @@ if args.faviconmulti:
         except urllib3.exceptions.ProtocolError:
             pass
         except requests.exceptions.ReadTimeout:
+            pass
+        except KeyError:
             pass
 
 if args.corsmisconfig:
@@ -496,51 +505,52 @@ if args.redirect:
             else:
                 print(domainlist)
 
-if args.httpx:
-    user_agent_ = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/44.0.2403.155 Safari/537.36"
-    header = {"User-Agent": user_agent_}
-
-    async def get_responses(client, link_paths: str):
+if args.ipaddresses:
+    with open(f"{args.ipaddresses}", "r") as f:
+        domains = [x.strip() for x in f.readlines()]
+    for domain_list in domains:
         try:
-            r = await client.get(link_paths)
-            if r.status_code == 200:
-                print(f"{link_paths} - {Fore.GREEN}({r.status_code})({content_length})({server}){Fore.RESET}")
-            if r.status_code == 403:
-                print(f"{link_paths} - {Fore.RED}({r.status_code})({content_length})({server}){Fore.RESET}")
-            if r.status_code == 301:
-                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
-            if r.status_code == 302:
-                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
-            if r.status_code == 303:
-                print(f"{link_paths} - {Fore.YELLOW}({r.status_code})({content_length})({server}){Fore.RESET}")
+            ips = socket.gethostbyname(domain_list)
+            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.CYAN}{ips}")
+        except socket.gaierror:
+            pass
+
+if args.domaininfo:
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"
+    header = {"User-Agent": user_agent}
+    with open(f"{args.domaininfo}", "r") as f:
+        domains = [x.strip() for x in f.readlines()]
+    ip_list = []
+    for domain_list in domains:
+        try:
+            sessions = requests.Session()
+            r = sessions.get(domain_list, verify=False, headers=header)
+            if "https://" in domain_list:
+                domain_list = domain_list.replace("https://", "")
+            if "http://" in domain_list:
+                domain_list = domain_list.replace("https://", "")
+            for v, k in r.headers.items():
+                if "Server" in v:
+                    server = k
+            soup = BeautifulSoup(r.text, "html.parser")
+            title = soup.find("title")
+            ips = socket.gethostbyname(domain_list)
+            ip_check = os.system(f"ping -c1 -W1 {ips} > /dev/null")
+            if ip_check == 0:
+                ip_list.append(ips)
             else:
-                print(f"{link_paths} - ({r.status_code})({content_length})({server})")
-        except RuntimeError:
+                pass
+            with open(f"ips.txt", "w") as f:
+                for ipaddresses in ip_list:
+                    f.writelines(f"{ipaddresses}\n")
+            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{server}]")
+        except socket.gaierror:
             pass
-        except ValueError:
+        except requests.exceptions.MissingSchema:
+            print(f"{Fore.RED} Please use http:// or https://")
+        except requests.exceptions.SSLError:
             pass
-        except httpx.UnsupportedProtocol:
+        except requests.exceptions.ConnectionError:
             pass
-
-    async def main():
-        try:
-            async with httpx.AsyncClient() as client:
-                with open(f"{args.httpx}", "r") as f:
-                    subdomains = [x.strip() for x in f.readlines()]
-                task = []
-                for links in subdomains:
-                    task.append(asyncio.create_task(get_responses(client, links)))
-                await asyncio.gather(*task)
-                return task
-        except RuntimeError:
-            pass
-        except ValueError:
-            pass
-        
-    asyncio.run(main())    
-
-
-
-        
-
-
+        except AttributeError:
+            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[No title]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{server}]")
