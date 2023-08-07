@@ -32,7 +32,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.4
+V 1.5
 By c0deninja
 
 """
@@ -150,6 +150,21 @@ parser.add_argument('-dinfo', '--domaininfo',
                     type=str, help='get domain information like codes,server,content length',
                     metavar='domain list')
 
+parser.add_argument('-isubs', '--importantsubdomains',
+                    type=str, help='extract interesting subdomains from a list like dev, admin, test and etc..',
+                    metavar='domain list')
+
+parser.add_argument('-pspider', '--paramspider',
+                    type=str, help='extract parameters from a domain',
+                    metavar='domain.com')
+
+parser.add_argument('-s3', '--s3buckets',
+                    type=str, help='find s3 buckets',
+                    metavar='domains.txt')
+
+parser.add_argument('-nsubs', '--newsubdomains',
+                    type=str, help='check for new subdomains',
+                    metavar='domains.txt')
 
 args = parser.parse_args()
 
@@ -521,6 +536,8 @@ if args.domaininfo:
     with open(f"{args.domaininfo}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
     ip_list = []
+    server = []
+    new_server = set()
     for domain_list in domains:
         try:
             sessions = requests.Session()
@@ -531,7 +548,7 @@ if args.domaininfo:
                 domain_list = domain_list.replace("https://", "")
             for v, k in r.headers.items():
                 if "Server" in v:
-                    server = k
+                    server.append(k)
             soup = BeautifulSoup(r.text, "html.parser")
             title = soup.find("title")
             ips = socket.gethostbyname(domain_list)
@@ -543,7 +560,8 @@ if args.domaininfo:
             with open(f"ips.txt", "w") as f:
                 for ipaddresses in ip_list:
                     f.writelines(f"{ipaddresses}\n")
-            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{server}]")
+            new_server.update(server)
+            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
         except socket.gaierror:
             pass
         except requests.exceptions.MissingSchema:
@@ -553,4 +571,84 @@ if args.domaininfo:
         except requests.exceptions.ConnectionError:
             pass
         except AttributeError:
-            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[No title]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{server}]")
+            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[No title]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
+        except UnicodeDecodeError:
+            pass
+        except requests.exceptions.InvalidURL:
+            pass
+        except:
+            pass
+
+if args.importantsubdomains:
+    with open(f"{args.importantsubdomains}", "r") as f:
+        important_subs = []
+        subdomains = [x.strip() for x in f.readlines()]
+        for subdomain_list in subdomains:
+            if "admin" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "dev" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "test" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "api" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "staging" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "prod" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "beta" in subdomain_list:
+                important_subs.append(subdomain_list)
+            if "manage" in subdomain_list:
+                important_subs.append(subdomain_list)
+        for pos, value in enumerate(important_subs):
+            print(f"{Fore.CYAN}{pos}: {Fore.GREEN}{value}")
+        with open("juice_subs.txt", "w") as f:
+            for goodsubs in important_subs:
+                f.writelines(f"{goodsubs}\n")
+
+if args.s3buckets:
+    try:
+        with open(f"{args.s3buckets}", "r") as f:
+            subdomains = [x.strip() for x in f.readlines()]
+            s3_buckets = set()
+            no_s3 = set()
+            for subdomain_list in subdomains:
+                sessions = requests.Session()
+                r = sessions.get(f"{subdomain_list}", verify=False)
+                for k, v in r.headers.items():
+                    if "X-Amz-Bucket-Region" in k:
+                        print(f"{Fore.GREEN}S3 Bucket: {Fore.MAGENTA}{subdomain_list}")
+                    else:
+                        no_s3.add(subdomain_list)
+                for s3buckets in no_s3:
+                    print(s3buckets)
+    except requests.exceptions.SSLError:
+        pass
+    except requests.exceptions.ConnectionError:
+        pass
+  
+if args.newsubdomains:
+    with open(f"/Users/c0deninja/bugbounty/eurofins/subdomains", "r") as f:
+        subdomains = [x.strip() for x in f.readlines()]
+        compare_subs = set()
+        no_dups = []
+        cmd = f"./scripts/spotter.sh {args.newsubdomains} | uniq | sort"
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        spotterout, err = p.communicate()
+        spotterout = spotterout.decode()
+        compare_subs.add(spotterout)
+        cmd = f"./scripts/certsh.sh {args.newsubdomains} | uniq | sort"
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        certshout, err = p.communicate()
+        certshout = certshout.decode()
+        compare_subs.add(certshout)
+        cmd = f"./tools/assetfinder -subs-only {args.newsubdomains} | uniq | sort"
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        assetout, err = p.communicate()
+        assetout = assetout.decode()
+        compare_subs.add(assetout)
+        for lines in compare_subs:
+            if lines not in subdomains:
+                no_dups.append(lines)
+        for no_duplicates in no_dups:
+            print(f"{Fore.GREEN}NEW: {Fore.CYAN}{no_duplicates}")
