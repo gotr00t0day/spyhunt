@@ -1,7 +1,5 @@
-from shutil import which
-from shodan import Shodan
-from colorama import Fore, Back, Style
-from os import path, mkdir
+from colorama import Fore
+from os import path
 from builtwith import builtwith
 from modules.favicon import *
 from bs4 import BeautifulSoup
