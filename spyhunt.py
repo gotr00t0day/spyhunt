@@ -163,10 +163,6 @@ parser.add_argument('-pspider', '--paramspider',
                     type=str, help='extract parameters from a domain',
                     metavar='domain.com')
 
-parser.add_argument('-nsubs', '--newsubdomains',
-                    type=str, help='check for new subdomains',
-                    metavar='domains.txt')
-
 
 parser.add_argument('-nft', '--not_found',
                     type=str, help='check for 404 status code',
@@ -677,32 +673,7 @@ if args.importantsubdomains:
             for goodsubs in important_subs:
                 f.writelines(f"{goodsubs}\n")
 
-  
-if args.newsubdomains:
-    with open(f"/Users/c0deninja/bugbounty/eurofins/subdomains", "r") as f:
-        subdomains = [x.strip() for x in f.readlines()]
-        compare_subs = set()
-        no_dups = []
-        cmd = f"./scripts/spotter.sh {args.newsubdomains} | uniq | sort"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        spotterout, err = p.communicate()
-        spotterout = spotterout.decode()
-        compare_subs.add(spotterout)
-        cmd = f"./scripts/certsh.sh {args.newsubdomains} | uniq | sort"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        certshout, err = p.communicate()
-        certshout = certshout.decode()
-        compare_subs.add(certshout)
-        cmd = f"./tools/assetfinder -subs-only {args.newsubdomains} | uniq | sort"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        assetout, err = p.communicate()
-        assetout = assetout.decode()
-        compare_subs.add(assetout)
-        for lines in compare_subs:
-            if lines not in subdomains:
-                no_dups.append(lines)
-        for no_duplicates in no_dups:
-            print(f"{Fore.GREEN}NEW: {Fore.CYAN}{no_duplicates}")
+
 
 if args.not_found:
     user_agent_ = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"

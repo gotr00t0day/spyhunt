@@ -110,3 +110,10 @@ else:
     commands("easy_install shodan")
     if which("shodan"):
         print(Fore.GREEN + "shodan installed successfully")
+
+if which("paramspider"):
+    pass
+else:
+    commands("git clone https://github.com/devanshbatham/paramspider | cd paramspider | pip3 install .")
+    if which("paramspider"):
+        print(Fore.GREEN + "shodan installed successfully")
