@@ -704,3 +704,6 @@ if args.not_found:
         links = (f"{x.strip()}" for x in f.readlines())
         output_file = "results.txt"
         get_results(links, output_file)
+
+if args.paramspider:
+    commands(f"paramspider -d {args.paramspider}")
