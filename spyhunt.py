@@ -3,6 +3,11 @@ from os import path
 from builtwith import builtwith
 from modules.favicon import *
 from bs4 import BeautifulSoup
+from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse, urljoin
+import concurrent.futures
+import multiprocessing
 import os.path
 import socket
 import subprocess
@@ -16,6 +21,8 @@ import requests
 import mmh3
 import urllib3
 import warnings
+import re
+import execjs
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -30,7 +37,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.5
+V 1.7
 By c0deninja
 
 """
@@ -156,12 +163,13 @@ parser.add_argument('-pspider', '--paramspider',
                     type=str, help='extract parameters from a domain',
                     metavar='domain.com')
 
-parser.add_argument('-s3', '--s3buckets',
-                    type=str, help='find s3 buckets',
-                    metavar='domains.txt')
-
 parser.add_argument('-nsubs', '--newsubdomains',
                     type=str, help='check for new subdomains',
+                    metavar='domains.txt')
+
+
+parser.add_argument('-nft', '--not_found',
+                    type=str, help='check for 404 status code',
                     metavar='domains.txt')
 
 args = parser.parse_args()
@@ -171,11 +179,11 @@ args = parser.parse_args()
 if args.s:
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
-        cmd = f"subfinder -d {args.s}"
+        cmd = f"subfinder -d {args.s} -silent"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, err = p.communicate()
-        out = out.decode()  
-        with open(f"{args.save}", "w") as subfinder:
+        out = out.decode() 
+        with open(f"{args.save}", "a") as subfinder:
             subfinder.writelines(out)
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
@@ -299,7 +307,7 @@ if args.faviconmulti:
 
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
-    with open(f"{args.corsmisconfig}") as f:
+    with open(f"{args.corsmisconfig}", "r") as f:
         domains = (x.strip() for x in f.readlines())
         try:
             for domainlist in domains:
@@ -332,7 +340,7 @@ if args.corsmisconfig:
 if args.hostheaderinjection:
     print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
     redirect = ["301", "302", "303", "307", "308"]
-    with open(f"{args.hostheaderinjection}") as f:
+    with open(f"{args.hostheaderinjection}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
         payload = b"google.com" 
         print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
@@ -370,6 +378,8 @@ if args.hostheaderinjection:
                     print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
                 print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
         except requests.exceptions.TooManyRedirects:
+            pass
+        except requests.exceptions.InvalidSchema:
             pass
 
 if args.securityheaders:
@@ -428,6 +438,58 @@ if args.j:
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
+        response = requests.get(args.j)
+        html_content = response.text
+        pattern = r'<script\s+(?:[^>]*?\s+)?src=(["\'])(.*?)\1'
+
+        def extract_js(html_content):
+            matches = re.findall(pattern, html_content, re.IGNORECASE)
+            js_urls = []
+            for match in matches:
+                relative_url = match[1]
+                if relative_url.startswith(('http://', 'https://')):
+                    full_url = relative_url
+                elif relative_url.startswith('//'):
+                    parsed_base_url = urlparse(args.j)
+                    full_url = f"{parsed_base_url.scheme}:{relative_url}"
+                else:
+                    full_url = urljoin(args.j, relative_url)
+                js_urls.append(full_url)
+            return js_urls
+
+        def extract_endpoints(js_url):
+            response = requests.get(js_url)
+            js_content = response.text
+
+            context = execjs.get().compile(js_content)
+            urls = [item for item in context.eval("Object.values(this)") if isinstance(item, str) and item.startswith(('http://', 'https://'))]
+
+            return urls
+
+        
+        with ThreadPoolExecutor() as executor:
+             js_urls = executor.submit(extract_js, html_content).result()
+             
+        try:
+            all_endpoints = []
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(extract_endpoints, js_url) for js_url in js_urls]
+                for future in concurrent.futures.as_completed(futures):
+                    endpoints = future.result()
+                    all_endpoints.extend(endpoints)
+        except execjs._exceptions.ProcessExitedWithNonZeroStatus:
+            pass
+
+        for js_url in js_urls:
+            print(js_url)
+
+        print("\n\n")
+        print("-------- ENDPOINTS -----------")
+        print("\n\n")
+
+        for endpoint in all_endpoints:
+            print(f"{endpoint}\n")
+
         commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
         commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
 
@@ -559,7 +621,12 @@ if args.domaininfo:
                 for ipaddresses in ip_list:
                     f.writelines(f"{ipaddresses}\n")
             new_server.update(server)
-            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
+            if r.status_code == 200:
+                print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.GREEN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
+            if r.status_code == 403:
+                print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.RED}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
+            else:
+                print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
         except socket.gaierror:
             pass
         except requests.exceptions.MissingSchema:
@@ -574,6 +641,8 @@ if args.domaininfo:
             pass
         except requests.exceptions.InvalidURL:
             pass
+        except KeyboardInterrupt:
+            sys.exit()
         except:
             pass
 
@@ -583,47 +652,31 @@ if args.importantsubdomains:
         subdomains = [x.strip() for x in f.readlines()]
         for subdomain_list in subdomains:
             if "admin" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "dev" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "test" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "api" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "staging" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "prod" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "beta" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
             if "manage" in subdomain_list:
-                important_subs.append(subdomain_list)
+                important_subs.append(f"{subdomain_list}")
+            if "jira" in subdomain_list:
+                important_subs.append(f"{subdomain_list}")
+            if "github" in subdomain_list:
+                important_subs.append(f"{subdomain_list}")
         for pos, value in enumerate(important_subs):
             print(f"{Fore.CYAN}{pos}: {Fore.GREEN}{value}")
         with open("juice_subs.txt", "w") as f:
             for goodsubs in important_subs:
                 f.writelines(f"{goodsubs}\n")
 
-if args.s3buckets:
-    try:
-        with open(f"{args.s3buckets}", "r") as f:
-            subdomains = [x.strip() for x in f.readlines()]
-            s3_buckets = set()
-            no_s3 = set()
-            for subdomain_list in subdomains:
-                sessions = requests.Session()
-                r = sessions.get(f"{subdomain_list}", verify=False)
-                for k, v in r.headers.items():
-                    if "X-Amz-Bucket-Region" in k:
-                        print(f"{Fore.GREEN}S3 Bucket: {Fore.MAGENTA}{subdomain_list}")
-                    else:
-                        no_s3.add(subdomain_list)
-                for s3buckets in no_s3:
-                    print(s3buckets)
-    except requests.exceptions.SSLError:
-        pass
-    except requests.exceptions.ConnectionError:
-        pass
   
 if args.newsubdomains:
     with open(f"/Users/c0deninja/bugbounty/eurofins/subdomains", "r") as f:
@@ -650,3 +703,33 @@ if args.newsubdomains:
                 no_dups.append(lines)
         for no_duplicates in no_dups:
             print(f"{Fore.GREEN}NEW: {Fore.CYAN}{no_duplicates}")
+
+if args.not_found:
+    user_agent_ = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"
+    header = {"User-Agent": user_agent_}
+    session = requests.Session()
+    session.headers.update(header)
+
+    def check_status(domain):
+        try:
+            r = session.get(domain, verify=False, headers=header, timeout=10)
+            if r.status_code == 404:
+                return domain
+        except requests.exceptions.RequestException:
+            pass
+
+    def get_results(links, output_file):
+        pool = ThreadPool(processes=multiprocessing.cpu_count())
+        results = pool.imap_unordered(check_status, links)
+        with open(output_file, "w") as f:
+            for result in results:
+                if result:
+                    f.write(f"{result}\n")
+                    print(result)
+        pool.close()
+        pool.join()
+
+    with open(args.not_found, "r") as f:
+        links = (f"{x.strip()}" for x in f.readlines())
+        output_file = "results.txt"
+        get_results(links, output_file)
