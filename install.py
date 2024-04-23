@@ -31,7 +31,7 @@ if which("nodejs"):
     print(Fore.GREEN + "Found nodejs")
 if which("npm"):
     print(Fore.GREEN + "Found npm")
-    command("npm install broken-link-checker -g")
+    commands("npm install broken-link-checker -g")
 
 home = os.environ['HOME']
 
