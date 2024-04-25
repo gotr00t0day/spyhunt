@@ -200,7 +200,7 @@ if args.s:
             certsh.writelines(certshout)
     else:
         commands(f"subfinder -d {args.s}")
-        commands(f"./tools/assetfinder -subs-only {args.s} | uniq | sort")
+        commands(f"assetfinder --subs-only {args.s} | uniq | sort")
         commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
         commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
 
