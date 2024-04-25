@@ -12,29 +12,32 @@ def commands(cmd):
         pass
 
 # colorama 
-
 commands("sudo pip3 install colorama")
 
 # golang
-
 commands("sudo apt install golang")
 
 # nodejs
-
 commands("sudo apt install nodejs")
-
-# npm
-commands("sudo apt install npm")
-
-# brokenlinkchecker
 if which("nodejs"):
     print(Fore.GREEN + "Found nodejs")
+    
+# npm
+commands("sudo apt install npm")
 if which("npm"):
     print(Fore.GREEN + "Found npm")
+    
+# brokenlinkchecker
+if which("blc"):
+    pass
+else:
     commands("npm install broken-link-checker -g")
+    if which("blc"):
+        print(Fore.GREEN + "broken-link-checker installed successfully")
 
 home = os.environ['HOME']
 
+#dnsx
 if which("dnsx"):
     pass
 else:
@@ -42,6 +45,7 @@ else:
     if which("dnsx"):
         print(Fore.GREEN + "dnsx installed successfully")
 
+#aquatone
 if which("aquatone"):
     pass
 else:
@@ -50,6 +54,7 @@ else:
     if which("aquatone"):
         print(Fore.GREEN + "aquatone installed successfully")
 
+#subfinder
 if which("subfinder"):
     pass
 else:
@@ -57,6 +62,7 @@ else:
     if which("subfinder"):
         print(Fore.GREEN + "subfinder installed successfully")
 
+#jq
 if which("jq"):
     pass
 else:
@@ -64,6 +70,7 @@ else:
     if which("jq"):
         print(Fore.GREEN + "jq installed successfully")
 
+#waybackurls
 if which("waybackurls"):
     pass
 else:
@@ -71,11 +78,13 @@ else:
     if which("waybackurls"):
         print(Fore.GREEN + "installed successfully")
 
+#httprobe
 if which("httprobe"):
     pass
 else: 
     commands("go install github.com/tomnomnom/httprobe@latest | cd {}/go/bin | sudo mv {}/go/bin/httprobe /usr/local/bin".format(home, home))
 
+#httpx
 if which("httpx"):
     pass
 else: 
@@ -83,6 +92,7 @@ else:
     if which("httpx"):
         print(Fore.GREEN + "httpx installed successfully")
 
+#anew
 if which("anew"):
     pass
 else:
@@ -90,13 +100,23 @@ else:
     if which("anew"):
         print(Fore.GREEN + "anew installed successfully")
 
+#gau
 if which("gau"):
     pass
 else:
     commands("go install github.com/lc/gau@latest | cd {}/go/bin | sudo mv {}/go/bin/gau /usr/local/bin".format(home, home))
     if which("gau"):
         print(Fore.GREEN + "gau installed successfully")
-        
+
+#gauplus
+if which("gauplus"):
+    pass
+else:
+    commands("go install github.com/bp0lr/gauplus@latest | cd {}/go/bin | sudo mv {}/go/bin/gauplus /usr/local/bin".format(home, home))
+    if which("gauplus"):
+        print(Fore.GREEN + "gauplus installed successfully")
+
+#hakrawler
 if which("hakrawler"):
     pass
 else:  
@@ -104,6 +124,7 @@ else:
     if which("gau"):
         print(Fore.GREEN + "gau installed successfully")
 
+#shodan
 if which("shodan"):
     pass
 else:
@@ -111,6 +132,7 @@ else:
     if which("shodan"):
         print(Fore.GREEN + "shodan installed successfully")
 
+#paramspider
 if which("paramspider"):
     pass
 else:
