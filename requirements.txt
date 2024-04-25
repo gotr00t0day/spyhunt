@@ -4,4 +4,4 @@ requests
 shodan
 mmh3
 codecs
-execjs
+PyExecJS

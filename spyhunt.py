@@ -37,7 +37,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.7
+V 1.8
 By c0deninja
 
 """
@@ -331,6 +331,8 @@ if args.corsmisconfig:
         except requests.exceptions.TooManyRedirects:
             pass
         except requests.exceptions.ConnectionError:
+            pass
+        except requests.exceptions.SSLError:
             pass
 
 if args.hostheaderinjection:
