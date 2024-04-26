@@ -144,7 +144,7 @@ else:
 if which("assetfinder"):
     pass
 else:
-    commands("go get -u github.com/tomnomnom/assetfinder@latest | cd {}/go/bin | sudo mv {}/go/bin/assetfinder /usr/local/bin".format(home, home))")
+    commands("go install -u github.com/tomnomnom/assetfinder@latest | cd {}/go/bin | sudo mv {}/go/bin/assetfinder /usr/local/bin".format(home, home))")
     if which("assetfinder"):
         print(Fore.GREEN + "assetfinder installed successfully")
 
