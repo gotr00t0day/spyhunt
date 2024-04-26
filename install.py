@@ -138,4 +138,14 @@ if which("paramspider"):
 else:
     commands("git clone https://github.com/devanshbatham/paramspider | cd paramspider | pip3 install .")
     if which("paramspider"):
-        print(Fore.GREEN + "shodan installed successfully")
+        print(Fore.GREEN + " installed successfully")
+
+#assetfinder
+if which("assetfinder"):
+    pass
+else:
+    commands("go get -u github.com/tomnomnom/assetfinder@latest | cd {}/go/bin | sudo mv {}/go/bin/assetfinder /usr/local/bin".format(home, home))")
+    if which("assetfinder"):
+        print(Fore.GREEN + "assetfinder installed successfully")
+
+
