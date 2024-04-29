@@ -303,37 +303,33 @@ if args.faviconmulti:
 
 if args.corsmisconfig:
     print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
-    with open(f"{args.corsmisconfig}", "r") as f:
-        domains = (x.strip() for x in f.readlines())
-        try:
-            for domainlist in domains:
-                for pos, web in enumerate(domainlist):
-                    if pos == 0:
-                        original_payload = []
-                        payload = []
-                        remove_com = domainlist.replace(".com", "")
-                        payload.append(f"{remove_com}evil.com")
-                        payload.append("evil.com")
-                        header = {'Origin': f"{payload}"}
-                    else:
-                        pass
-                [original_payload.append(i) for i in payload if i not in original_payload]
-                original_payload2 = ", ".join(original_payload)
+    with open(args.corsmisconfig, "r") as f:
+        domains = [x.strip() for x in f.readlines()]
+        for domainlist in domains:
+            try:
+                original_payload = []
+                payload = []
+                remove_com = domainlist.replace(".com", "")
+                payload.append(f"{remove_com}evil.com")
+                payload.append("evil.com")
+                header = {'Origin': f"{payload}"}
+
                 session = requests.Session()
                 session.max_redirects = 10
-                resp = session.get(f"{domainlist}", verify=False, headers=header)
+                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
+
                 for value, key in resp.headers.items():
-                    if value == "Access-Control-Allow-Origin":
-                        AllowOrigin = key
-                        if AllowOrigin == f"{payload}":
-                            print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
-                print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN} {domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{original_payload2}")
-        except requests.exceptions.TooManyRedirects:
-            pass
-        except requests.exceptions.ConnectionError:
-            pass
-        except requests.exceptions.SSLError:
-            pass
+                    if value == "Access-Control-Allow-Origin" and key == header['Origin']:
+                        print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+                        break
+                else:
+                    print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+
+            except requests.exceptions.RequestException as e:
+                if isinstance(e, requests.exceptions.ConnectionError):
+                    print(f"{Fore.RED}Connection error occurred while processing {domainlist}")
+                else:
+                    print(f"{Fore.RED}Error occurred while processing {domainlist}: {str(e)}")
 
 if args.hostheaderinjection:
     print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
