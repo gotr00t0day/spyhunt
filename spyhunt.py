@@ -307,12 +307,10 @@ if args.corsmisconfig:
         domains = [x.strip() for x in f.readlines()]
         for domainlist in domains:
             try:
-                original_payload = []
                 payload = []
-                remove_com = domainlist.replace(".com", "")
-                payload.append(f"{remove_com}evil.com")
+                payload.append(domainlist)
                 payload.append("evil.com")
-                header = {'Origin': f"{payload}"}
+                header = {'Origin': ', '.join(payload)}  # Constructing the header correctly here
 
                 session = requests.Session()
                 session.max_redirects = 10
