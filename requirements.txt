@@ -3,5 +3,4 @@ colorama
 requests
 shodan
 mmh3
-codecs
 PyExecJS
