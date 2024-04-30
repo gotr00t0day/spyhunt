@@ -327,52 +327,54 @@ if args.corsmisconfig:
                 if isinstance(e, requests.exceptions.ConnectionError):
                     print(f"{Fore.RED}Connection error occurred while processing {domainlist}")
                 else:
-                    print(f"{Fore.RED}Error occurred while processing {domainlist}: {str(e)}")
+                    print(f"{Fore.LIGHTBLACK_EX}Error occurred while processing {domainlist}: {str(e)}")
 
 if args.hostheaderinjection:
     print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
-    redirect = ["301", "302", "303", "307", "308"]
+    redirect = {"301", "302", "303", "307", "308"}  # Use a set for faster lookup
+    timeout = 5  # Timeout value in seconds
     with open(f"{args.hostheaderinjection}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
         payload = b"google.com" 
         print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
-        try:
-            for domainlist in domains:
-                session = requests.Session()
-                header = {"X-Forwarded-Host": "google.com"}
-                header2 = {"Host": "google.com"}
-                resp = session.get(f"{domainlist}", verify=False, headers=header)
-                resp2 = session.get(f"{domainlist}", verify=False, headers=header2)
+        for domainlist in domains:
+            session = requests.Session()
+            header = {"X-Forwarded-Host": "google.com"}
+            header2 = {"Host": "google.com"}
+            try:
+                start_time = time.time()
+                resp = session.get(f"{domainlist}", verify=False, headers=header, timeout=timeout)
+                resp2 = session.get(f"{domainlist}", verify=False, headers=header2, timeout=timeout)
+                elapsed_time = time.time() - start_time
                 resp_content = resp.content
                 resp_status = resp.status_code
                 resp2_content = resp2.content
+
+                vuln_domain = []
                 for value, key in resp.headers.items():
-                    for pos, web in enumerate(domainlist):
-                        if pos == 0:
-                            vuln_domain = []
-                            duplicates_none = []  
-                            if value == "Location" and key == payload and resp.status_code in redirect:
-                                vuln_domain.append(domainlist)
-                            if payload in resp_content or key == payload:
-                                vuln_domain.append(domainlist)
-                        else:
-                            pass
+                    if value == "Location" and key == payload and resp_status in redirect:
+                        vuln_domain.append(domainlist)
+                    if payload in resp_content or key == payload:
+                        vuln_domain.append(domainlist)
+
                 for value2, key2 in resp2.headers.items():
-                    for pos, web in enumerate(domainlist):
-                        if pos == 0:
-                            if payload in resp2_content or key == payload:
-                                vuln_domain.append(domainlist)
-                        else:
-                            pass
+                    if payload in resp2_content or key == payload:
+                        vuln_domain.append(domainlist)
+
                 if vuln_domain:
-                    [duplicates_none.append(x) for x in vuln_domain if x not in duplicates_none]
+                    duplicates_none = list(set(vuln_domain))  # Remove duplicates
                     duplicates_none = ", ".join(duplicates_none)
                     print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
+
                 print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
-        except requests.exceptions.TooManyRedirects:
-            pass
-        except requests.exceptions.InvalidSchema:
-            pass
+
+                if elapsed_time > timeout:
+                    print(f"{Fore.LIGHTBLACK_EX} Timeout Exceeded for {domainlist}. Skipping...")
+                    continue
+
+            except requests.exceptions.RequestException as e:
+                print(f"{Fore.LIGHTBLACK_EX} Error occurred while accessing {domainlist}: {e}")
+                continue
 
 if args.securityheaders:
     print(f"{Fore.MAGENTA}\t\t Security Headers\n")
