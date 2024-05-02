@@ -1,0 +1,14 @@
+.idea/*
+*.pyc
+venv/*
+venv2/*
+test.txt
+.DS_Store
+payloads.txt
+traffic*.txt
+firewalls/*
+test-*.json
+test_env.sh
+whatwaf.egg-info/*
+build/*
+dist/*
