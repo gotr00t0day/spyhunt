@@ -53,18 +53,15 @@ def commands(cmd):
         pass
 
 def rand_agent():
-    try:
-        agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.3',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.'
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.'
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.3'
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.3'
-        ]
-        use_agent = random.choice(agents)
-    except:
-        pass
+    agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.3',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.3',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.3',
+    ]
+    return random.choice(agents)
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
@@ -580,7 +577,7 @@ if args.smuggler:
     commands(f"python3 {smug_path}/tools/smuggler/smuggler.py -u {args.smuggler} -q")
 
 if args.redirect:
-    user_agent = use_agent()
+    user_agent = rand_agent()
     header = {'User Agent': f'{user_agent}'}
     path = os.getcwd()
     with open(f"{path}/{args.redirect}") as f:
@@ -603,7 +600,7 @@ if args.ipaddresses:
             pass
 
 if args.domaininfo:
-    user_agent = use_agent()
+    user_agent = rand_agent()
     header = {"User-Agent": user_agent}
     with open(f"{args.domaininfo}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
@@ -692,7 +689,7 @@ if args.importantsubdomains:
 
 
 if args.not_found:
-    user_agent_ = use_agent()
+    user_agent_ = rand_agent()
     header = {"User-Agent": user_agent_}
     session = requests.Session()
     session.headers.update(header)
