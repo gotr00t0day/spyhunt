@@ -163,10 +163,13 @@ parser.add_argument('-pspider', '--paramspider',
                     type=str, help='extract parameters from a domain',
                     metavar='domain.com')
 
-
 parser.add_argument('-nft', '--not_found',
                     type=str, help='check for 404 status code',
                     metavar='domains.txt')
+
+parser.add_argument('-ph', '--pathhunt',
+                    type=str, help='check for directory traversal',
+                    metavar='domain.txt')
 
 args = parser.parse_args()
 
@@ -705,3 +708,13 @@ if args.not_found:
 
 if args.paramspider:
     commands(f"paramspider -d {args.paramspider}")
+
+if args.pathhunt:
+    def commands(cmd):
+        try:
+            subprocess.check_call(cmd, shell=True)
+        except:
+            pass
+    pathhunt_path = os.path.abspath(os.getcwd())
+    commands(f"python3 {pathhunt_path}/tools/pathhunt.py -t {args.pathhunt}")   
+    
