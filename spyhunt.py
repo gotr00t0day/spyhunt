@@ -319,7 +319,7 @@ if args.corsmisconfig:
 
                 session = requests.Session()
                 session.max_redirects = 10
-                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10), headers=header)
+                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
 
                 for value, key in resp.headers.items():
                     if value == "Access-Control-Allow-Origin" and key == header['Origin']:
