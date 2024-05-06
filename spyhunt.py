@@ -512,7 +512,7 @@ if args.dns:
 if args.probe:
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
-        commands(f'cat {args.probe} | httprobe | anew >> {args.save}')
+        commands(f'cat {args.probe} | httprobe -c 50 | anew >> {args.save}')
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
         if not path.exists(f"{args.save}"):
