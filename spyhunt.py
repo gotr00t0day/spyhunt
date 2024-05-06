@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urljoin
+from modules import user_agents
 import concurrent.futures
 import multiprocessing
 import os.path
@@ -77,10 +78,6 @@ parser.add_argument('-d', '--dns',
 
 parser.add_argument('-p', '--probe',
                     type=str, help='probe domains.',
-                    metavar='domains.txt')
-
-parser.add_argument('-a', '--aquatone',
-                    type=str, help='take screenshots of domains.',
                     metavar='domains.txt')
 
 parser.add_argument('-r', '--redirects',
@@ -173,6 +170,8 @@ parser.add_argument('-ph', '--pathhunt',
 
 args = parser.parse_args()
 
+user_agent = user_agents.get_useragent()
+header = {"User-Agent": user_agents}
 
 
 if args.s:
@@ -241,21 +240,24 @@ if args.favicon:
         print(hash)
 
 if args.enumeratedomain:
-    server = []
-    r = requests.get(f"{args.enumeratedomain}", verify=False) 
-    domain = args.enumeratedomain
-    if "https://" in domain:
-        domain = domain.replace("https://", "")
-    if "http://" in domain:
-        domain = domain.replace("http://", "")
-    ip = socket.gethostbyname(domain)
-    for value, key in r.headers.items():
-        if value == "Server" or value == "server":
-            server.append(key)
-    if server:
-        print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}] {Fore.WHITE}Server:{Fore.GREEN} {server}")
-    else:
-        print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}]")
+    try:
+        server = []
+        r = requests.get(f"{args.enumeratedomain}", verify=False, headers=header) 
+        domain = args.enumeratedomain
+        if "https://" in domain:
+            domain = domain.replace("https://", "")
+        if "http://" in domain:
+            domain = domain.replace("http://", "")
+        ip = socket.gethostbyname(domain)
+        for value, key in r.headers.items():
+            if value == "Server" or value == "server":
+                server.append(key)
+        if server:
+            print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}] {Fore.WHITE}Server:{Fore.GREEN} {server}")
+        else:
+            print(f"{Fore.WHITE}{args.enumeratedomain}{Fore.MAGENTA}: {Fore.CYAN}[{ip}]")
+    except requests.exceptions.MissingSchema as e:
+        print(e)
     
 
 if args.faviconmulti:
@@ -264,12 +266,12 @@ if args.faviconmulti:
         domains = [x.strip() for x in f.readlines()]
         try:
             for domainlist in domains:
-                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=60)
+                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=60, headers=header)
                 if response.status_code == 200:
                     favicon = codecs.encode(response.content,"base64")
                     hash = mmh3.hash(favicon)
                     hashes = {}
-                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=5)
+                response = requests.get(f'{domainlist}/favicon.ico', verify=False, timeout=5, headers=header)
                 if response.status_code == 200:
                     favicon = codecs.encode(response.content,"base64")
                     hash = mmh3.hash(favicon)
@@ -317,7 +319,7 @@ if args.corsmisconfig:
 
                 session = requests.Session()
                 session.max_redirects = 10
-                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
+                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10), headers=header)
 
                 for value, key in resp.headers.items():
                     if value == "Access-Control-Allow-Origin" and key == header['Origin']:
@@ -531,14 +533,6 @@ if args.redirects:
         commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302")   
 
 
-if args.aquatone:
-    if path.exists("aquatone"):
-        pass
-    if not path.exists("aquatone"):
-        commands("mkdir aquatone")
-    commands(f"cat {args.aquatone} | aquatone")
-
-
 if args.brokenlinks:
     if args.save:
         print(Fore.CYAN + "Saving output to {}".format(args.save))
@@ -588,8 +582,6 @@ if args.ipaddresses:
             pass
 
 if args.domaininfo:
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"
-    header = {"User-Agent": user_agent}
     with open(f"{args.domaininfo}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
     ip_list = []
@@ -675,10 +667,7 @@ if args.importantsubdomains:
                 f.writelines(f"{goodsubs}\n")
 
 
-
 if args.not_found:
-    user_agent_ = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36"
-    header = {"User-Agent": user_agent_}
     session = requests.Session()
     session.headers.update(header)
 
