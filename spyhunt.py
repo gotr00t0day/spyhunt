@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urljoin
-from modules import user_agents
+from modules import useragent_list
 import concurrent.futures
 import multiprocessing
 import os.path
@@ -170,8 +170,8 @@ parser.add_argument('-ph', '--pathhunt',
 
 args = parser.parse_args()
 
-user_agent = user_agents.get_useragent()
-header = {"User-Agent": user_agents}
+user_agent = useragent_list.get_useragent()
+header = {"User-Agent": user_agent}
 
 
 if args.s:
