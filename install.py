@@ -13,16 +13,7 @@ def commands(cmd):
     except subprocess.CalledProcessError:
         pass
 
-
-
-def run_with_sudo(command):
-    try:
-        subprocess.run(["sudo", "bash", "-c", command], check=True, shell=False)
-    except subprocess.CalledProcessError:
-        pass
-
-
-# Dictionary of package managers 
+# Dictionary of package managers
 package_managers = {
     "apt": {"install_cmd": "apt install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
     "yum": {"install_cmd": "yum install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
@@ -39,17 +30,17 @@ for manager, data in package_managers.items():
         for package, package_name in data["packages"].items():
             print(f"Installing {package}...")
             try:
-                run_with_sudo(f"{data['install_cmd']} {package_name}")
+                commands(f"{data['install_cmd']} {package_name}")
                 found = True
             except subprocess.CalledProcessError:
-                print(Fore.YELLOW + f"Error occurred while installing {package} using {manager}")
+                print(f"Error occurred while installing {package} using {manager}")
         if found:
-            print(Fore.GREEN + "Packages installed successfully")
+            print("Packages installed successfully")
         else:
-            print(Fore.RED + "Failed to install any packages")
+            print("Failed to install any packages")
         break
 else:
-    print(Fore.RED + "No compatible package manager found")
+    print("No compatible package manager found")
 
 # colorama 
 commands("sudo pip3 install colorama")
@@ -58,7 +49,7 @@ commands("sudo pip3 install colorama")
 if which("blc"):
     pass
 else:
-    run_with_sudo("npm install broken-link-checker -g")
+    commands("npm install broken-link-checker -g")
     if which("blc"):
         print(Fore.GREEN + "broken-link-checker installed successfully")
 
