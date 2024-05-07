@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from shutil import which
 from colorama import Fore, Back, Style
 from os import path
@@ -11,27 +12,52 @@ def commands(cmd):
     except:
         pass
 
-# colorama 
-commands("sudo pip3 install colorama")
 
-# golang
-commands("sudo apt install golang")
+def which(program):
+    try:
+        subprocess.run(["which", program], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
-# nodejs
-commands("sudo apt install nodejs")
-if which("nodejs"):
-    print(Fore.GREEN + "Found nodejs")
-    
-# npm
-commands("sudo apt install npm")
-if which("npm"):
-    print(Fore.GREEN + "Found npm")
-    
+# run commands with sudo
+def run_with_sudo(command):
+    subprocess.run(["sudo", "bash", "-c", command], check=True)
+
+# Dictionary of package managers 
+package_managers = {
+    "apt": {"install_cmd": "apt install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "yum": {"install_cmd": "yum install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "dnf": {"install_cmd": "dnf install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "zypper": {"install_cmd": "zypper install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "pacman": {"install_cmd": "pacman -S", "packages": {"npm": "npm", "golang": "go", "nodejs": "nodejs"}}
+}
+
+# Install packages
+for manager, data in package_managers.items():
+    if which(manager):
+        print(f"Using {manager} package manager:")
+        found = False
+        for package, package_name in data["packages"].items():
+            print(f"Installing {package}...")
+            try:
+                run_with_sudo(f"{data['install_cmd']} {package_name}")
+                found = True
+            except subprocess.CalledProcessError:
+                print(Fore.YELLOW + f"Error occurred while installing {package} using {manager}")
+        if found:
+            print(Fore.GREEN + "Packages installed successfully")
+        else:
+            print(Fore.RED + "Failed to install any packages")
+        break
+else:
+    print(Fore.RED + "No compatible package manager found")
+
 # brokenlinkchecker
 if which("blc"):
     pass
 else:
-    commands("npm install broken-link-checker -g")
+    run_with_sudo("npm install broken-link-checker -g")
     if which("blc"):
         print(Fore.GREEN + "broken-link-checker installed successfully")
 
