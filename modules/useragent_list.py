@@ -1,4 +1,4 @@
-import random
+import secrets
 
 
 _useragent_list = [
@@ -350,4 +350,4 @@ _useragent_list = [
 ]
 
 def get_useragent() -> str:
-    return random.choice(_useragent_list)
+    return secrets.choice(_useragent_list)
