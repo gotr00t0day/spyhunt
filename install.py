@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from shutil import which
-from colorama import Fore, Style
+from colorama import Fore
 from os import path
 import os
 import subprocess
@@ -15,9 +15,12 @@ def commands(cmd):
 
 
 
-# run commands with sudo
 def run_with_sudo(command):
-    subprocess.run(["sudo", "bash", "-c", command], check=True)
+    try:
+        subprocess.run(["sudo", "bash", "-c", command], check=True, shell=False)
+    except subprocess.CalledProcessError:
+        pass
+
 
 # Dictionary of package managers 
 package_managers = {
