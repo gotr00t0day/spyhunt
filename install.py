@@ -6,6 +6,9 @@ import os.path
 import os
 import subprocess
 
+# colorama 
+commands("sudo pip3 install colorama")
+
 def commands(cmd):
     try:
         subprocess.check_call(cmd, shell=True)
