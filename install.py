@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 from shutil import which
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 from os import path
-import os.path
 import os
 import subprocess
 
-# colorama 
-commands("sudo pip3 install colorama")
+
 
 def commands(cmd):
     try:
         subprocess.check_call(cmd, shell=True)
-    except:
+    except subprocess.CalledProcessError:
         pass
 
 
-def which(program):
-    try:
-        subprocess.run(["which", program], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except subprocess.CalledProcessError:
-        return False
 
 # run commands with sudo
 def run_with_sudo(command):
@@ -55,6 +47,9 @@ for manager, data in package_managers.items():
         break
 else:
     print(Fore.RED + "No compatible package manager found")
+
+# colorama 
+commands("sudo pip3 install colorama")
 
 # brokenlinkchecker
 if which("blc"):
