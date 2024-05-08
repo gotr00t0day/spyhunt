@@ -16,13 +16,13 @@ sudo python3 install.py
 # USAGE 
 
 ```
-   usage: spyhunt.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com] [-d domain.com]
-                  [-p domains.txt] [-a domains.txt] [-r domains.txt] [-b domains.txt] [-w https://domain.com]
+usage: spyhunt.py [-h] [-sv filename.txt] [-s domain.com] [-j domain.com] [-t domain.com] [-d domain.com]
+                  [-p domains.txt] [-r domains.txt] [-b domains.txt] [-w https://domain.com]
                   [-wc https://domain.com] [-fi https://domain.com] [-fm https://domain.com]
                   [-na https://domain.com] [-ri IP] [-rim IP] [-sc domain.com] [-co domains.txt]
                   [-hh domain.com] [-sh domain.com] [-ed domain.com] [-smu domain.com] [-rd domain list]
                   [-ips domain list] [-dinfo domain list] [-isubs domain list] [-pspider domain.com]
-                  [-nsubs domains.txt] [-nft domains.txt]
+                  [-nft domains.txt] [-ph domain.txt]
 
 options:
   -h, --help            show this help message and exit
@@ -36,8 +36,6 @@ options:
                         scan for dns records
   -p domains.txt, --probe domains.txt
                         probe domains.
-  -a domains.txt, --aquatone domains.txt
-                        take screenshots of domains.
   -r domains.txt, --redirects domains.txt
                         links getting redirected
   -b domains.txt, --brokenlinks domains.txt
@@ -78,10 +76,10 @@ options:
                         extract interesting subdomains from a list like dev, admin, test and etc..
   -pspider domain.com, --paramspider domain.com
                         extract parameters from a domain
-  -nsubs domains.txt, --newsubdomains domains.txt
-                        check for new subdomains
   -nft domains.txt, --not_found domains.txt
-                        check for 404 status code                         
+                        check for 404 status code
+  -ph domain.txt, --pathhunt domain.txt
+                        check for directory traversal                        
 ```
 
 
