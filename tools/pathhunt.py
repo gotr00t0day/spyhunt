@@ -42,7 +42,7 @@ if args.target:
 if args.parameters:
     try:
         s = requests.Session()
-        r = s.get(args.parameters, verify=False, headers=header)
+        r = s.get(args.parameters, verify=False, headers=header, timeout=10)
         content = r.content
         links = re.findall('(?:href=")(.*?)"', content.decode('utf-8'))
         links2 =  re.findall('(?:src=")(.*?)"', content.decode('utf-8'))
@@ -69,7 +69,7 @@ if args.parameters:
             path_traversal_list = [x.strip() for x in f.readlines()]
         for parameterslist in parameters_list:
             for path_list in path_traversal_list:
-                r_traversal = requests.get(f"{parameterslist}{path_list}", verify=False, headers=header)
+                r_traversal = requests.get(f"{parameterslist}{path_list}", verify=False, headers=header, timeout=10)
                 if r_traversal.status_code == 200 and "root:x:" in r_traversal.text:
                     vulnerable.append(f"{parameterslist}{path_list}")
                 else:

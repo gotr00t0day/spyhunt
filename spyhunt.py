@@ -168,6 +168,11 @@ parser.add_argument('-ph', '--pathhunt',
                     type=str, help='check for directory traversal',
                     metavar='domain.txt')
 
+parser.add_argument('-st', '--subdomaintakeover',
+                    type=str, help='check for subdomain takeovers',
+                    metavar='domain.txt')
+
+
 args = parser.parse_args()
 
 user_agent = useragent_list.get_useragent()
