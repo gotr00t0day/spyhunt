@@ -38,7 +38,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.9
+V 1.10
 By c0deninja
 
 """
@@ -307,79 +307,99 @@ if args.faviconmulti:
             pass
 
 if args.corsmisconfig:
-    print(f"\t\t\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\n\n")
+    print(f"\\t\\t\\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\\n\\n")
+
     with open(args.corsmisconfig, "r") as f:
         domains = [x.strip() for x in f.readlines()]
-        for domainlist in domains:
-            try:
-                payload = []
-                payload.append(domainlist)
-                payload.append("evil.com")
-                header = {'Origin': ', '.join(payload)}  # Constructing the header correctly here
 
-                session = requests.Session()
-                session.max_redirects = 10
-                resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
+    def check_cors(domainlist):
+        try:
+            payload = []
+            payload.append(domainlist)
+            payload.append("evil.com")
+            header = {'Origin': ', '.join(payload)}  # Constructing the header correctly here
 
-                for value, key in resp.headers.items():
-                    if value == "Access-Control-Allow-Origin" and key == header['Origin']:
-                        print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
-                        break
-                else:
-                    print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+            session = requests.Session()
+            session.max_redirects = 10
+            resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
 
-            except requests.exceptions.RequestException as e:
-                if isinstance(e, requests.exceptions.ConnectionError):
-                    print(f"{Fore.RED}Connection error occurred while processing {domainlist}")
-                else:
-                    print(f"{Fore.LIGHTBLACK_EX}Error occurred while processing {domainlist}: {str(e)}")
+            for value, key in resp.headers.items():
+                if value == "Access-Control-Allow-Origin" and key == header['Origin']:
+                    print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+                    return
+            print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+
+        except requests.exceptions.RequestException as e:
+            if isinstance(e, requests.exceptions.ConnectionError):
+                print(f"{Fore.RED}Connection error occurred while processing {domainlist}")
+            else:
+                print(f"{Fore.LIGHTBLACK_EX}Error occurred while processing {domainlist}: {str(e)}")
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(check_cors, domain) for domain in domains]
+
+    for future in futures:
+        try:
+            future.result()
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
 
 if args.hostheaderinjection:
-    print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
+    print(f"{Fore.MAGENTA}\\t\\t Host Header Injection \\n")
     redirect = {"301", "302", "303", "307", "308"}  # Use a set for faster lookup
     timeout = 5  # Timeout value in seconds
     with open(f"{args.hostheaderinjection}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
-        payload = b"google.com" 
-        print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
-        for domainlist in domains:
-            session = requests.Session()
-            header = {"X-Forwarded-Host": "google.com"}
-            header2 = {"Host": "google.com"}
-            try:
-                start_time = time.time()
-                resp = session.get(f"{domainlist}", verify=False, headers=header, timeout=timeout)
-                resp2 = session.get(f"{domainlist}", verify=False, headers=header2, timeout=timeout)
-                elapsed_time = time.time() - start_time
-                resp_content = resp.content
-                resp_status = resp.status_code
-                resp2_content = resp2.content
+    payload = b"google.com"
+    print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\\n")
 
-                vuln_domain = []
-                for value, key in resp.headers.items():
-                    if value == "Location" and key == payload and resp_status in redirect:
-                        vuln_domain.append(domainlist)
-                    if payload in resp_content or key == payload:
-                        vuln_domain.append(domainlist)
+    def check_host_header_injection(domainlist):
+        vuln_domain = []
+        session = requests.Session()
+        header = {"X-Forwarded-Host": "google.com"}
+        header2 = {"Host": "google.com"}
+        try:
+            start_time = time.time()
+            resp = session.get(f"{domainlist}", verify=False, headers=header, timeout=timeout)
+            resp2 = session.get(f"{domainlist}", verify=False, headers=header2, timeout=timeout)
+            elapsed_time = time.time() - start_time
+            resp_content = resp.content
+            resp_status = resp.status_code
+            resp2_content = resp2.content
 
-                for value2, key2 in resp2.headers.items():
-                    if payload in resp2_content or key == payload:
-                        vuln_domain.append(domainlist)
+            for value, key in resp.headers.items():
+                if value == "Location" and key == payload and resp_status in redirect:
+                    vuln_domain.append(domainlist)
+                if payload in resp_content or key == payload:
+                    vuln_domain.append(domainlist)
 
-                if vuln_domain:
-                    duplicates_none = list(set(vuln_domain))  # Remove duplicates
-                    duplicates_none = ", ".join(duplicates_none)
-                    print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
+            for value2, key2 in resp2.headers.items():
+                if payload in resp2_content or key == payload:
+                    vuln_domain.append(domainlist)
 
-                print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
+            if vuln_domain:
+                duplicates_none = list(set(vuln_domain))  # Remove duplicates
+                duplicates_none = ", ".join(duplicates_none)
+                print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
 
-                if elapsed_time > timeout:
-                    print(f"{Fore.LIGHTBLACK_EX} Timeout Exceeded for {domainlist}. Skipping...")
-                    continue
+            print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
 
-            except requests.exceptions.RequestException as e:
-                print(f"{Fore.LIGHTBLACK_EX} Error occurred while accessing {domainlist}: {e}")
-                continue
+            if elapsed_time > timeout:
+                print(f"{Fore.LIGHTBLACK_EX} Timeout Exceeded for {domainlist}. Skipping...")
+
+        except requests.exceptions.RequestException as e:
+            print(f"{Fore.LIGHTBLACK_EX} Error occurred while accessing {domainlist}: {e}")
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(check_host_header_injection, domain) for domain in domains]
+
+    for future in futures:
+        try:
+            future.result()
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            
 
 if args.securityheaders:
     print(f"{Fore.MAGENTA}\t\t Security Headers\n")
