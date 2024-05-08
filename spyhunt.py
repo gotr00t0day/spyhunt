@@ -374,7 +374,7 @@ if args.hostheaderinjection:
                 if payload in resp_content or key == payload:
                     vuln_domain.append(domainlist)
 
-            for value2, key2 in resp2.headers.items():
+            for key2 in resp2.headers.items():
                 if payload in resp2_content or key == payload:
                     vuln_domain.append(domainlist)
 
