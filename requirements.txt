@@ -4,3 +4,4 @@ requests
 shodan
 mmh3
 PyExecJS
+json

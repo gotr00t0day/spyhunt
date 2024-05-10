@@ -7,6 +7,7 @@ from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urljoin
 from modules import useragent_list
+from modules import sub_output
 import concurrent.futures
 import multiprocessing
 import os.path
@@ -24,6 +25,8 @@ import urllib3
 import warnings
 import re
 import execjs
+import nmap3
+import json
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -171,6 +174,10 @@ parser.add_argument('-ph', '--pathhunt',
 parser.add_argument('-st', '--subdomaintakeover',
                     type=str, help='check for subdomain takeovers',
                     metavar='domain.txt')
+
+parser.add_argument('-n', '--nmap',
+                    type=str, help='Scan a target with nmap',
+                    metavar='domain.com or IP')
 
 
 args = parser.parse_args()
@@ -404,7 +411,7 @@ if args.hostheaderinjection:
             future.result()
         except Exception as e:
             print(f"An error occurred: {e}")
-            
+
 
 if args.securityheaders:
     print(f"{Fore.MAGENTA}\t\t Security Headers\n")
@@ -732,3 +739,26 @@ if args.pathhunt:
     pathhunt_path = os.path.abspath(os.getcwd())
     commands(f"python3 {pathhunt_path}/tools/pathhunt.py -t {args.pathhunt}")   
     
+if args.nmap:
+    print(f"{Fore.WHITE}Scanning {Fore.CYAN}{args.nmap}\n")
+    nmap = nmap3.Nmap()
+    results = nmap.nmap_version_detection(f"{args.nmap}")
+
+    with open("nmap_results.json", "w") as f:
+        json.dump(results, f, indent=4)
+
+    with open('nmap_results.json', 'r') as file:
+        data = json.load(file)
+
+    for host, host_data in data.items():
+        if host != "runtime" and host != "stats" and host != "task_results":
+            ports = host_data.get("ports", [])
+            for port in ports:
+                portid = port.get("portid")
+                service = port.get("service", {})
+                product = service.get("product")
+                print(f"{Fore.WHITE}Port: {Fore.CYAN}{portid}, {Fore.WHITE}Product: {Fore.CYAN}{product}")
+
+
+
+
