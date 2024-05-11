@@ -5,3 +5,4 @@ shodan
 mmh3
 PyExecJS
 json
+python3-nmap
