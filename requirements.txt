@@ -5,3 +5,4 @@ shodan
 mmh3
 PyExecJS
 python3-nmap
+beautifulsoup4
