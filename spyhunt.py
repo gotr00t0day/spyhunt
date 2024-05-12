@@ -179,6 +179,10 @@ parser.add_argument('-n', '--nmap',
                     type=str, help='Scan a target with nmap',
                     metavar='domain.com or IP')
 
+parser.add_argument('-api', '--api_fuzzer',
+                    type=str, help='Look for API endpoints',
+                    metavar='domain.com')
+
 
 args = parser.parse_args()
 
@@ -214,7 +218,7 @@ if args.s:
             certsh.writelines(certshout)
     else:
         commands(f"subfinder -d {args.s}")
-        commands(f"./tools/assetfinder -subs-only {args.s} | uniq | sort")
+        commands(f"assetfinder -subs-only {args.s} | uniq | sort")
         commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
         commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
 
@@ -758,6 +762,25 @@ if args.nmap:
                 service = port.get("service", {})
                 product = service.get("product")
                 print(f"{Fore.WHITE}Port: {Fore.CYAN}{portid}, {Fore.WHITE}Product: {Fore.CYAN}{product}")
+
+if args.api_fuzzer:
+    s = requests.Session()
+    with open("payloads/api-endpoints.txt", "r") as file:
+        api_endpoints = [x.strip() for x in file.readlines()]
+    
+    def check_endpoint(endpoint):
+        r = s.get(f"{args.api_fuzzer}/{endpoint}", verify=False, headers=header)
+        if r.status_code == 200:
+            results = f"{Fore.GREEN}{args.api_fuzzer}/{endpoint}"
+        else:
+            results = f"{args.api_fuzzer}/{endpoint}"
+        
+        return results
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(check_endpoint, endpoint) for endpoint in api_endpoints]
+        for future in concurrent.futures.as_completed(futures):
+            print(future.result())
 
 
 
