@@ -514,6 +514,8 @@ if args.j:
                     all_endpoints.extend(endpoints)
         except execjs._exceptions.ProcessExitedWithNonZeroStatus:
             pass
+        except execjs._exceptions.ProgramError:
+            pass
 
         for js_url in js_urls:
             print(js_url)
