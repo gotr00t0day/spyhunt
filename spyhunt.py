@@ -610,14 +610,30 @@ if args.redirect:
                 print(domainlist)
 
 if args.ipaddresses:
+    ip_list = []
+
     with open(f"{args.ipaddresses}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
-    for domain_list in domains:
+
+    def scan(domain: str):
         try:
-            ips = socket.gethostbyname(domain_list)
-            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.CYAN}{ips}")
+            ips = socket.gethostbyname(domain)
+            ip_list.append(ips)
+            print(f"{Fore.GREEN} {domain} {Fore.WHITE}- {Fore.CYAN}{ips}")
         except socket.gaierror:
             pass
+
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = [executor.submit(scan, domain) for domain in domains]
+        
+        for future in futures:
+            future.result()
+    
+    with open("ips.txt", "w") as file:
+        ip_list = list(dict.fromkeys(ip_list))
+        for iplist in ip_list:
+            file.write(f"{iplist}\n")
+
 
 if args.domaininfo:
     with open(f"{args.domaininfo}", "r") as f:
