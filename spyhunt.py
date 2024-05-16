@@ -785,6 +785,7 @@ if args.api_fuzzer:
     s = requests.Session()
     with open("payloads/api-endpoints.txt", "r") as file:
         api_endpoints = [x.strip() for x in file.readlines()]
+        
     
     def check_endpoint(endpoint):
         r = s.get(f"{args.api_fuzzer}/{endpoint}", verify=False, headers=header)

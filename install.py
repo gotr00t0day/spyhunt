@@ -136,7 +136,7 @@ else:
 if which("paramspider"):
     pass
 else:
-    commands("git clone https://github.com/devanshbatham/paramspider | cd paramspider | pip3 install .")
+    commands(r"git clone https://github.com/devanshbatham/paramspider | cd paramspider | pip3 install")
     if which("paramspider"):
         print(Fore.GREEN + " installed successfully")
 
