@@ -27,6 +27,7 @@ import re
 import execjs
 import nmap3
 import json
+import shodan
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -181,6 +182,10 @@ parser.add_argument('-n', '--nmap',
 
 parser.add_argument('-api', '--api_fuzzer',
                     type=str, help='Look for API endpoints',
+                    metavar='domain.com')
+
+parser.add_argument('-sho', '--shodan',
+                    type=str, help='Recon with shodan',
                     metavar='domain.com')
 
 
@@ -517,6 +522,7 @@ if args.j:
         except execjs._exceptions.ProgramError:
             pass
 
+
         for js_url in js_urls:
             print(js_url)
 
@@ -621,6 +627,8 @@ if args.ipaddresses:
             ip_list.append(ips)
             print(f"{Fore.GREEN} {domain} {Fore.WHITE}- {Fore.CYAN}{ips}")
         except socket.gaierror:
+            pass
+        except UnicodeError:
             pass
 
     with ThreadPoolExecutor(max_workers=50) as executor:
@@ -785,7 +793,6 @@ if args.api_fuzzer:
     s = requests.Session()
     with open("payloads/api-endpoints.txt", "r") as file:
         api_endpoints = [x.strip() for x in file.readlines()]
-        
     
     def check_endpoint(endpoint):
         r = s.get(f"{args.api_fuzzer}/{endpoint}", verify=False, headers=header)
@@ -800,6 +807,26 @@ if args.api_fuzzer:
         futures = [executor.submit(check_endpoint, endpoint) for endpoint in api_endpoints]
         for future in concurrent.futures.as_completed(futures):
             print(future.result())
+
+if args.shodan:
+    key = input("Shodan Key: ")
+    print("\n")
+    api = shodan.Shodan(str(key))
+    try:
+        results = api.search(args.shodan)
+        results_ = []
+        results_5 = []
+        for result in results['matches']:
+            results_.append(result['ip_str'])
+        results_5.append(results_[0:50])
+        if results_5:
+            print(f"{Fore.MAGENTA}[+] {Fore.CYAN}-{Fore.WHITE} Shodan IPs: {Fore.GREEN}{', '.join(map(str,results_5))}")
+        if not results_5:
+            pass
+    except shodan.APIError:
+        print(f"{Fore.MAGENTA}[+] {Fore.CYAN}-{Fore.YELLOW} Shodan Key: {Fore.GREEN} Invalid Key")
+    except socket.herror:
+        pass
 
 
 

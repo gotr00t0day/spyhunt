@@ -36,6 +36,9 @@ api/events
 api/geo
 api/get
 api/graphql
+graphql/api
+graphql/graphql
+graphql/v1
 api/identity
 api/identity/envelope
 api/index.html
