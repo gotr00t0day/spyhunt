@@ -79,7 +79,15 @@ options:
   -nft domains.txt, --not_found domains.txt
                         check for 404 status code
   -ph domain.txt, --pathhunt domain.txt
-                        check for directory traversal                        
+                        check for directory traversal      
+  -n domain.com or IP, --nmap domain.com or IP
+                        Scan a target with nmap
+  -api domain.com, --api_fuzzer domain.com
+                        Look for API endpoints
+  -sho domain.com, --shodan domain.com
+                        Recon with shodan
+  -fp domain.com, --forbiddenpass domain.com
+                        Bypass 403 forbidden        
 ```
 
 

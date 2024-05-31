@@ -42,7 +42,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.10
+V 1.11
 By c0deninja
 
 """
@@ -172,10 +172,6 @@ parser.add_argument('-ph', '--pathhunt',
                     type=str, help='check for directory traversal',
                     metavar='domain.txt')
 
-parser.add_argument('-st', '--subdomaintakeover',
-                    type=str, help='check for subdomain takeovers',
-                    metavar='domain.txt')
-
 parser.add_argument('-n', '--nmap',
                     type=str, help='Scan a target with nmap',
                     metavar='domain.com or IP')
@@ -186,6 +182,10 @@ parser.add_argument('-api', '--api_fuzzer',
 
 parser.add_argument('-sho', '--shodan',
                     type=str, help='Recon with shodan',
+                    metavar='domain.com')
+
+parser.add_argument('-fp', '--forbiddenpass',
+                    type=str, help='Bypass 403 forbidden',
                     metavar='domain.com')
 
 
@@ -478,61 +478,6 @@ if args.j:
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        response = requests.get(args.j)
-        html_content = response.text
-        pattern = r'<script\s+(?:[^>]*?\s+)?src=(["\'])(.*?)\1'
-
-        def extract_js(html_content):
-            matches = re.findall(pattern, html_content, re.IGNORECASE)
-            js_urls = []
-            for match in matches:
-                relative_url = match[1]
-                if relative_url.startswith(('http://', 'https://')):
-                    full_url = relative_url
-                elif relative_url.startswith('//'):
-                    parsed_base_url = urlparse(args.j)
-                    full_url = f"{parsed_base_url.scheme}:{relative_url}"
-                else:
-                    full_url = urljoin(args.j, relative_url)
-                js_urls.append(full_url)
-            return js_urls
-
-        def extract_endpoints(js_url):
-            response = requests.get(js_url)
-            js_content = response.text
-
-            context = execjs.get().compile(js_content)
-            urls = [item for item in context.eval("Object.values(this)") if isinstance(item, str) and item.startswith(('http://', 'https://'))]
-
-            return urls
-
-        
-        with ThreadPoolExecutor() as executor:
-             js_urls = executor.submit(extract_js, html_content).result()
-             
-        try:
-            all_endpoints = []
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(extract_endpoints, js_url) for js_url in js_urls]
-                for future in concurrent.futures.as_completed(futures):
-                    endpoints = future.result()
-                    all_endpoints.extend(endpoints)
-        except execjs._exceptions.ProcessExitedWithNonZeroStatus:
-            pass
-        except execjs._exceptions.ProgramError:
-            pass
-
-
-        for js_url in js_urls:
-            print(js_url)
-
-        print("\n\n")
-        print("-------- ENDPOINTS -----------")
-        print("\n\n")
-
-        for endpoint in all_endpoints:
-            print(f"{endpoint}\n")
-
         commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
         commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
 
@@ -829,5 +774,74 @@ if args.shodan:
         pass
 
 
+if args.forbiddenpass:
+    def word_list(wordlist: str) -> str:
+        try:
+            with open(wordlist, "r") as f:
+                data = [x.strip() for x in f.readlines()] 
+            return data
+        except FileNotFoundError as e:
+            print(f"File not found: {e}")
 
+    wordlist = word_list("payloads/bypasses.txt")
+
+    def header_bypass():
+        headers = [
+            {'User-Agent': user_agent},
+            {'User-Agent': str(user_agent), 'X-Custom-IP-Authorization': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-For': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-For': '127.0.0.1:80'},
+            {'User-Agent': str(user_agent), 'X-Originally-Forwarded-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Originating-': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Originating-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'True-Client-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-WAP-Profile': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Arbitrary': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-HTTP-DestinationURL': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Proto': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Destination': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Remote-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Client-IP': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Host': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Host': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '4443'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '80'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8080'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8443'},
+            {'User-Agent': str(user_agent), 'X-ProxyUser-Ip': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Client-IP': '127.0.0.1'}
+
+        ]
+        return headers
+    
+    def do_request(url: str, stream=False):
+        headers = header_bypass()
+        try:
+            for header in headers:
+                if stream:
+                    s = requests.Session()
+                    r = s.get(url, stream=True, headers=header)
+                else:
+                    s = requests.Session()
+                    r = s.get(url, headers=header)
+                if r.status_code == 200:
+                    print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.GREEN + " [{}]".format(r.status_code))
+                else:
+                    print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.RED + " [{}]".format(r.status_code))
+        except requests.exceptions.ConnectionError as ce_error:
+            pass
+        except requests.exceptions.Timeout as t_error:
+            print("Connection Timeout Error: ", t_error)
+            pass
+        except requests.exceptions.RequestException as req_err:
+            print("Some Ambiguous Exception:", req_err)
+            pass
+
+    def main(wordlist):
+        for bypass in wordlist:
+            links = f"{args.forbiddenpass}{bypass}"
+            do_request(links)
+
+    if __name__ == "__main__":
+        main(wordlist)
 
