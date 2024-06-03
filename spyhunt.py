@@ -29,6 +29,7 @@ import nmap3
 import json
 import shodan
 
+SHODAN_API_KEY = "API KEY"
 warnings.filterwarnings(action='ignore',module='bs4')
 
 requests.packages.urllib3.disable_warnings()
@@ -754,7 +755,7 @@ if args.api_fuzzer:
             print(future.result())
 
 if args.shodan:
-    key = input("Shodan Key: ")
+    key = SHODAN_API_KEY
     print("\n")
     api = shodan.Shodan(str(key))
     try:
