@@ -59,24 +59,33 @@ def commands(cmd):
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
+vuln_group = parser.add_argument_group('Vulnerability')
+crawlers_group = parser.add_argument_group('Crawlers')
+passiverecon_group = parser.add_argument_group('Passive Recon')
+fuzzing_group = parser.add_argument_group('Fuzzing')
+portscanning_group = parser.add_argument_group('Port Scanning')
+
 group.add_argument('-sv', '--save', action='store',
                    help="save output to file",
                    metavar="filename.txt")
 
-parser.add_argument('-s',
+group.add_argument('-wl', '--wordlist', action='store',
+                   help="wordlist to use",
+                   metavar="filename.txt")
+
+parser.add_argument('-th', '--threads',
+                    type=str, help='default 25',
+                    metavar='25')
+
+passiverecon_group.add_argument('-s',
                     type=str, help='scan for subdomains',
                     metavar='domain.com')
 
-parser.add_argument('-j',
-                    type=str, help='find javascript files',
-                    metavar='domain.com')
-
-parser.add_argument('-t', '--tech',
+passiverecon_group.add_argument('-t', '--tech',
                     type=str, help='find technologies',
                     metavar='domain.com')
 
-
-parser.add_argument('-d', '--dns',
+passiverecon_group.add_argument('-d', '--dns',
                     type=str, help='scan for dns records',
                     metavar='domain.com')
 
@@ -88,15 +97,23 @@ parser.add_argument('-r', '--redirects',
                     type=str, help='links getting redirected',
                     metavar='domains.txt')
 
-parser.add_argument('-b', '--brokenlinks',
+vuln_group.add_argument('-b', '--brokenlinks',
                     type=str, help='search for broken links',
                     metavar='domains.txt')
 
-parser.add_argument('-w', '--waybackurls',
+crawlers_group.add_argument('-pspider', '--paramspider',
+                    type=str, help='extract parameters from a domain',
+                    metavar='domain.com')
+
+crawlers_group.add_argument('-w', '--waybackurls',
                     type=str, help='scan for waybackurls',
                     metavar='https://domain.com')
 
-parser.add_argument('-wc', '--webcrawler',
+crawlers_group.add_argument('-j',
+                    type=str, help='find javascript files',
+                    metavar='domain.com')
+
+crawlers_group.add_argument('-wc', '--webcrawler',
                     type=str, help='scan for urls and js files',
                     metavar='https://domain.com')
 
@@ -108,7 +125,7 @@ parser.add_argument('-fm', '--faviconmulti',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
-parser.add_argument('-na', '--networkanalyzer',
+passiverecon_group.add_argument('-na', '--networkanalyzer',
                     type=str, help='net analyzer',
                     metavar='https://domain.com')
 
@@ -124,11 +141,15 @@ parser.add_argument('-sc', '--statuscode',
                     type=str, help='statuscode',
                     metavar='domain.com')
 
-parser.add_argument('-co', '--corsmisconfig',
+vuln_group.add_argument('-ph', '--pathhunt',
+                    type=str, help='check for directory traversal',
+                    metavar='domain.txt')
+
+vuln_group.add_argument('-co', '--corsmisconfig',
                     type=str, help='cors misconfiguration',
                     metavar='domains.txt')
 
-parser.add_argument('-hh', '--hostheaderinjection',
+vuln_group.add_argument('-hh', '--hostheaderinjection',
                     type=str, help='host header injection',
                     metavar='domain.com')
 
@@ -140,7 +161,7 @@ parser.add_argument('-ed', '--enumeratedomain',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
 
-parser.add_argument('-smu', '--smuggler',
+vuln_group.add_argument('-smu', '--smuggler',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
 
@@ -148,11 +169,11 @@ parser.add_argument('-rd', '--redirect',
                     type=str, help='get redirect links',
                     metavar='domain list')
 
-parser.add_argument('-ips', '--ipaddresses',
+passiverecon_group.add_argument('-ips', '--ipaddresses',
                     type=str, help='get the ips from a list of domains',
                     metavar='domain list')
 
-parser.add_argument('-dinfo', '--domaininfo',
+passiverecon_group.add_argument('-dinfo', '--domaininfo',
                     type=str, help='get domain information like codes,server,content length',
                     metavar='domain list')
 
@@ -160,32 +181,28 @@ parser.add_argument('-isubs', '--importantsubdomains',
                     type=str, help='extract interesting subdomains from a list like dev, admin, test and etc..',
                     metavar='domain list')
 
-parser.add_argument('-pspider', '--paramspider',
-                    type=str, help='extract parameters from a domain',
-                    metavar='domain.com')
-
-parser.add_argument('-nft', '--not_found',
+fuzzing_group.add_argument('-nft', '--not_found',
                     type=str, help='check for 404 status code',
                     metavar='domains.txt')
 
-parser.add_argument('-ph', '--pathhunt',
-                    type=str, help='check for directory traversal',
-                    metavar='domain.txt')
-
-parser.add_argument('-n', '--nmap',
+portscanning_group.add_argument('-n', '--nmap',
                     type=str, help='Scan a target with nmap',
                     metavar='domain.com or IP')
 
-parser.add_argument('-api', '--api_fuzzer',
+fuzzing_group.add_argument('-api', '--api_fuzzer',
                     type=str, help='Look for API endpoints',
                     metavar='domain.com')
 
-parser.add_argument('-sho', '--shodan',
+passiverecon_group.add_argument('-sho', '--shodan',
                     type=str, help='Recon with shodan',
                     metavar='domain.com')
 
-parser.add_argument('-fp', '--forbiddenpass',
+vuln_group.add_argument('-fp', '--forbiddenpass',
                     type=str, help='Bypass 403 forbidden',
+                    metavar='domain.com')
+
+fuzzing_group.add_argument('-db', '--directorybrute',
+                    type=str, help='Brute force filenames and directories',
                     metavar='domain.com')
 
 
@@ -845,3 +862,29 @@ if args.forbiddenpass:
     if __name__ == "__main__":
         main(wordlist)
 
+if args.directorybrute:
+    if args.wordlist:
+        if args.threads:
+            with open(f"{args.wordlist}", "r") as f:
+                wordlist_ = [x.strip() for x in f.readlines()]
+            
+            print(f"Target: {Fore.CYAN}{args.directorybrute}{Fore.RESET}| Wordlist: {Fore.CYAN}{args.wordlist}{Fore.RESET}\n")
+            
+            def dorequests(wordlist: str):
+                s = requests.Session()
+                r = s.get(f"{args.directorybrute}/{wordlist}", verify=False, headers=header, timeout=10)
+                if r.status_code == 200:
+                    print(f"{args.directorybrute}/{Fore.GREEN}{wordlist}{Fore.RESET}")
+
+            threads = f"{args.threads}"
+            
+            with ThreadPoolExecutor(max_workers=int(threads)) as executor:
+                futures = [executor.submit(dorequests, wordlist) for wordlist in wordlist_]
+            
+            for future in futures:
+                future.result()
+
+        
+            
+        
+        
