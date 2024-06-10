@@ -1,32 +1,50 @@
+#!/usr/bin/env python3
 from shutil import which
-from colorama import Fore, Back, Style
+from colorama import Fore
 from os import path
-import os.path
 import os
 import subprocess
+
+
 
 def commands(cmd):
     try:
         subprocess.check_call(cmd, shell=True)
-    except:
+    except subprocess.CalledProcessError:
         pass
+
+# Dictionary of package managers
+package_managers = {
+    "apt": {"install_cmd": "apt install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "yum": {"install_cmd": "yum install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "dnf": {"install_cmd": "dnf install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "zypper": {"install_cmd": "zypper install", "packages": {"npm": "npm", "golang": "golang", "nodejs": "nodejs"}},
+    "pacman": {"install_cmd": "pacman -S", "packages": {"npm": "npm", "golang": "go", "nodejs": "nodejs"}}
+}
+
+# Install packages
+for manager, data in package_managers.items():
+    if which(manager):
+        print(f"Using {manager} package manager:")
+        found = False
+        for package, package_name in data["packages"].items():
+            print(f"Installing {package}...")
+            try:
+                commands(f"{data['install_cmd']} {package_name}")
+                found = True
+            except subprocess.CalledProcessError:
+                print(f"Error occurred while installing {package} using {manager}")
+        if found:
+            print("Packages installed successfully")
+        else:
+            print("Failed to install any packages")
+        break
+else:
+    print("No compatible package manager found")
 
 # colorama 
 commands("sudo pip3 install colorama")
 
-# golang
-commands("sudo apt install golang")
-
-# nodejs
-commands("sudo apt install nodejs")
-if which("nodejs"):
-    print(Fore.GREEN + "Found nodejs")
-    
-# npm
-commands("sudo apt install npm")
-if which("npm"):
-    print(Fore.GREEN + "Found npm")
-    
 # brokenlinkchecker
 if which("blc"):
     pass
