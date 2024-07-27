@@ -8,6 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, urljoin
 from modules import useragent_list
 from modules import sub_output
+from googlesearch import search
+import os.path
 import concurrent.futures
 import multiprocessing
 import os.path
@@ -42,7 +44,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.11
+V 1.12
 By c0deninja
 
 """
@@ -56,9 +58,17 @@ def commands(cmd):
     except:
         pass
 
+def scan(command: str) -> str:
+    cmd = command
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, err = p.communicate()
+    out = out.decode() 
+    return out
+
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
+nuclei_group = parser.add_argument_group('Nuclei Scans')
 vuln_group = parser.add_argument_group('Vulnerability')
 crawlers_group = parser.add_argument_group('Crawlers')
 passiverecon_group = parser.add_argument_group('Passive Recon')
@@ -204,6 +214,15 @@ vuln_group.add_argument('-fp', '--forbiddenpass',
 fuzzing_group.add_argument('-db', '--directorybrute',
                     type=str, help='Brute force filenames and directories',
                     metavar='domain.com')
+
+nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
+
+passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
+
+fuzzing_group.add_argument("-e", "--extensions", help="Comma-separated list of file extensions to scan", default="")
+
+fuzzing_group.add_argument("-x", "--exclude", help="Comma-separated list of status codes to exclude", default="")
+
 
 
 args = parser.parse_args()
@@ -518,7 +537,7 @@ if args.dns:
 if args.probe:
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
-        commands(f'cat {args.probe} | httprobe -c 50 | anew >> {args.save}')
+        commands(f'cat {args.probe} | httprobe -c 100 | anew >> {args.save}')
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
         if not path.exists(f"{args.save}"):
@@ -865,26 +884,107 @@ if args.forbiddenpass:
 if args.directorybrute:
     if args.wordlist:
         if args.threads:
-            with open(f"{args.wordlist}", "r") as f:
-                wordlist_ = [x.strip() for x in f.readlines()]
-            
-            print(f"Target: {Fore.CYAN}{args.directorybrute}{Fore.RESET}| Wordlist: {Fore.CYAN}{args.wordlist}{Fore.RESET}\n")
-            
-            def dorequests(wordlist: str):
+            def filter_wordlist(wordlist, extensions):
+                if not extensions:
+                    return wordlist
+                ext_list = [ext.strip() for ext in extensions.split(',')]
+                return [word for word in wordlist if any(word.endswith(ext) for ext in ext_list)]
+
+            def dorequests(wordlist: str, base_url: str, headers: dict, is_file_only: bool, excluded_codes: set):
                 s = requests.Session()
-                r = s.get(f"{args.directorybrute}/{wordlist}", verify=False, headers=header, timeout=10)
-                if r.status_code == 200:
-                    print(f"{args.directorybrute}/{Fore.GREEN}{wordlist}{Fore.RESET}")
+                
+                def check_and_print(url, type_str):
+                    try:
+                        r = s.get(url, verify=False, headers=headers, timeout=10)
+                        if r.status_code not in excluded_codes:
+                            color = Fore.GREEN if r.status_code == 200 else Fore.YELLOW
+                            print(f"{url} - {color}{type_str} Found (Status: {r.status_code}){Fore.RESET}")
+                    except requests.RequestException:
+                        pass
 
-            threads = f"{args.threads}"
-            
-            with ThreadPoolExecutor(max_workers=int(threads)) as executor:
-                futures = [executor.submit(dorequests, wordlist) for wordlist in wordlist_]
-            
-            for future in futures:
-                future.result()
+                if is_file_only:
+                    url = f"{base_url}/{wordlist}"
+                    check_and_print(url, "File")
+                else:
+                    dir_url = f"{base_url}/{wordlist}/"
+                    check_and_print(dir_url, "Directory")
+                    
+            def main():
+                with open(args.wordlist, "r") as f:
+                    wordlist_ = [x.strip() for x in f.readlines()]
+                
+                is_file_only = bool(args.extensions)
+                
+                filtered_wordlist = filter_wordlist(wordlist_, args.extensions)
+                
+                excluded_codes = set(int(code.strip()) for code in args.exclude.split(',') if code.strip())
+                
+                print(f"Target: {Fore.CYAN}{args.directorybrute}{Fore.RESET}\n"
+                    f"Wordlist: {Fore.CYAN}{args.wordlist}{Fore.RESET}\n"
+                    f"Extensions: {Fore.CYAN}{args.extensions or 'All'}{Fore.RESET}\n"
+                    f"Excluded Status Codes: {Fore.CYAN}{', '.join(map(str, excluded_codes)) or 'None'}{Fore.RESET}\n")
 
-        
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+
+                with ThreadPoolExecutor(max_workers=int(args.threads)) as executor:
+                    futures = [executor.submit(dorequests, wordlist, args.directorybrute, headers, is_file_only, excluded_codes) 
+                            for wordlist in filtered_wordlist]
+                    for future in futures:
+                        future.result()
+                            
+            if __name__ == "__main__":
+                main()
+
+if args.nuclei_lfi:
+    vulnerability = []
+    FileOrTarget = str(input("Do you want to scan a file or a single target?? Ex: F or T:  "))
+    if FileOrTarget == "F" or FileOrTarget == "f":
+        File = str(input("Filename: "))
+        print(f"Scanning File {File} ..... \n")
+        results = scan(f"nuclei -l {File} -tags lfi -c 100")
+        vulnerability.append(results)
+        if vulnerability:
+            for vulns in vulnerability:
+                print(vulns)
+    elif FileOrTarget == "T" or FileOrTarget == "t":
+        Target = str(input("Target: "))
+        print(f"Scanning Target {Target} ..... \n")
+        results = scan(f"nuclei -u {Target} -tags lfi -c 100")
+        vulnerability.append(results)
+        if vulnerability:
+            for vulns in vulnerability:
+                print(vulns)
+    else:
+        print("Enter either T or F")
+
+
+if args.google:
+    def search_google(dorks: str, page) -> str:
+        for url in search(dork, num_results=int(page)):
+            return url
+    try: 
+        dork = input("Enter Dork: ")
+        numpage = input("Enter number of links to display: ")
+        print ("\n")
+        search_google(dork, numpage)
+        print("\n")
+        print ("Found: {} links".format(numpage))
+    except Exception as e:
+        print(str(e))
+
+    save = input("Save results to a file (y/n)?: ").lower()
+    if save == "y":
+        dorklist = input("Filename: ")
+        with open(dorklist, "w") as f:
+            for url in search(dork, num_results=int(numpage)):
+                f.writelines(url)
+                f.writelines("\n")
+        if path.exists(dorklist):
+            print ("File saved successfully")
+        if not path.exists(dorklist):
+            print ("File was not saved")
+    elif save == "n":
+        pass        
             
         
         

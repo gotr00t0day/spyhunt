@@ -37,6 +37,14 @@ else:
 
 home = os.environ['HOME']
 
+# This will install nuclei
+
+commands("go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest")
+
+# Make sure nuclei-templates is in the / directory
+
+commands("cd ~ | git clone https://github.com/projectdiscovery/nuclei-templates.git")
+
 #dnsx
 if which("dnsx"):
     pass
