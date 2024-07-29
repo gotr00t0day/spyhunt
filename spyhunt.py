@@ -4,11 +4,13 @@ from builtwith import builtwith
 from modules.favicon import *
 from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin
 from modules import useragent_list
 from modules import sub_output
 from googlesearch import search
+from alive_progress import alive_bar
+import threading
 import os.path
 import concurrent.futures
 import multiprocessing
@@ -30,6 +32,7 @@ import execjs
 import nmap3
 import json
 import shodan
+import ipaddress
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -215,6 +218,10 @@ fuzzing_group.add_argument('-db', '--directorybrute',
                     type=str, help='Brute force filenames and directories',
                     metavar='domain.com')
 
+portscanning_group.add_argument('-cidr', '--cidr_notation',
+                    type=str, help='Scan an ip range to find assets and services',
+                    metavar='IP/24')
+
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
@@ -222,7 +229,6 @@ passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Go
 fuzzing_group.add_argument("-e", "--extensions", help="Comma-separated list of file extensions to scan", default="")
 
 fuzzing_group.add_argument("-x", "--exclude", help="Comma-separated list of status codes to exclude", default="")
-
 
 
 args = parser.parse_args()
@@ -890,7 +896,7 @@ if args.directorybrute:
                 ext_list = [ext.strip() for ext in extensions.split(',')]
                 return [word for word in wordlist if any(word.endswith(ext) for ext in ext_list)]
 
-            def dorequests(wordlist: str, base_url: str, headers: dict, is_file_only: bool, excluded_codes: set):
+            def dorequests(wordlist: str, base_url: str, headers: dict, is_file_only: bool, excluded_codes: set, bar, print_lock):
                 s = requests.Session()
                 
                 def check_and_print(url, type_str):
@@ -898,9 +904,12 @@ if args.directorybrute:
                         r = s.get(url, verify=False, headers=headers, timeout=10)
                         if r.status_code not in excluded_codes:
                             color = Fore.GREEN if r.status_code == 200 else Fore.YELLOW
-                            print(f"{url} - {color}{type_str} Found (Status: {r.status_code}){Fore.RESET}")
+                            with print_lock:
+                                print(f"\n{url} - {color}{type_str} Found (Status: {r.status_code}){Fore.RESET}\n")
                     except requests.RequestException:
                         pass
+                    finally:
+                        bar()
 
                 if is_file_only:
                     url = f"{base_url}/{wordlist}"
@@ -926,12 +935,16 @@ if args.directorybrute:
 
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
 
-                with ThreadPoolExecutor(max_workers=int(args.threads)) as executor:
-                    futures = [executor.submit(dorequests, wordlist, args.directorybrute, headers, is_file_only, excluded_codes) 
-                            for wordlist in filtered_wordlist]
-                    for future in futures:
-                        future.result()
-                            
+                print_lock = threading.Lock()
+
+                with alive_bar(len(filtered_wordlist), title="Scanning", bar="classic", spinner="classic") as bar:
+                    with ThreadPoolExecutor(max_workers=int(args.threads)) as executor:
+                        futures = [executor.submit(dorequests, wordlist, args.directorybrute, headers, is_file_only, excluded_codes, bar, print_lock) 
+                                for wordlist in filtered_wordlist]
+                        
+                        for future in as_completed(futures):
+                            future.result()
+
             if __name__ == "__main__":
                 main()
 
@@ -986,5 +999,40 @@ if args.google:
     elif save == "n":
         pass        
             
-        
-        
+if args.cidr_notation:
+    if args.ports:
+        if args.threads:
+            def scan_ip(ip, ports):
+                open_ports = []
+                for port in ports:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(0.5)
+                    result = sock.connect_ex((str(ip), port))
+                    if result == 0:
+                        open_ports.append(port)
+                    sock.close()
+                return ip, open_ports
+
+            def scan_subnet(subnet, ports, max_threads=100):
+                network = ipaddress.ip_network(subnet, strict=False)
+                
+                with ThreadPoolExecutor(max_workers=int(args.threads)) as executor:
+                    futures = [executor.submit(scan_ip, ip, ports) for ip in network.hosts()]
+                    
+                    for future in as_completed(futures):
+                        ip, open_ports = future.result()
+                        if open_ports:
+                            print(f"IP: {Fore.GREEN}{ip}:{Fore.CYAN}{",".join(map(str, open_ports))}{Fore.RESET}")
+
+            def parse_ports(ports):
+                if isinstance(ports, list):
+                    return [int(p) for p in ports]
+                return [int(p.strip()) for p in ports.split(',')]
+            
+            def main():
+                ports = parse_ports(args.ports)
+                scan_subnet(args.cidr_notation, ports, args.threads)
+
+            if __name__ == "__main__":
+                main()
+    

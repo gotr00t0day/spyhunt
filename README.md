@@ -128,3 +128,7 @@ python3 spyhunt.py -hh domains.txt
 Directory Brute Forcing
 ```
 python3 spyhunt.py --directorybrute domain.com --wordlist list.txt --threads 50 -e php,txt,html -x 404,403
+```
+Scanning a subnet
+```
+python3 spyhunt.py --cidr_notation IP/24 --ports 80,443 --threads 200
