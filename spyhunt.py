@@ -222,6 +222,10 @@ portscanning_group.add_argument('-cidr', '--cidr_notation',
                     type=str, help='Scan an ip range to find assets and services',
                     metavar='IP/24')
 
+portscanning_group.add_argument('-ps', '--ports',
+                    type=str, help='Port numbers to scan',
+                    metavar='80,443,8443')
+
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
