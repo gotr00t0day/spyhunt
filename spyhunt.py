@@ -226,6 +226,10 @@ portscanning_group.add_argument('-ps', '--ports',
                     type=str, help='Port numbers to scan',
                     metavar='80,443,8443')
 
+portscanning_group.add_argument('-pai', '--print_all_ips',
+                    type=str, help='Print all ips',
+                    metavar='IP/24')
+
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
@@ -786,18 +790,23 @@ if args.api_fuzzer:
         api_endpoints = [x.strip() for x in file.readlines()]
     
     def check_endpoint(endpoint):
-        r = s.get(f"{args.api_fuzzer}/{endpoint}", verify=False, headers=header)
-        if r.status_code == 200:
-            results = f"{Fore.GREEN}{args.api_fuzzer}/{endpoint}"
-        else:
-            results = f"{args.api_fuzzer}/{endpoint}"
-        
-        return results
+        url = f"{args.api_fuzzer}/{endpoint}"
+        try:
+            r = s.get(url, verify=False, headers=header, timeout=5)
+            if r.status_code == 200:
+                return f"{Fore.GREEN}{url}"
+            else:
+                return f"{Fore.RED}{url} [{r.status_code}]"
+        except requests.RequestException:
+            return f"{Fore.YELLOW}{url} [Error]"
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    print(f"Scanning {len(api_endpoints)} endpoints for {args.api_fuzzer}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = [executor.submit(check_endpoint, endpoint) for endpoint in api_endpoints]
         for future in concurrent.futures.as_completed(futures):
-            print(future.result())
+            result = future.result()
+            if result.startswith(Fore.GREEN):
+                print(result)
 
 if args.shodan:
     key = input("Shodan Key: ")
@@ -1040,3 +1049,32 @@ if args.cidr_notation:
             if __name__ == "__main__":
                 main()
     
+if args.print_all_ips:
+    def extract_ip(ip):
+        return str(ip)
+
+    def extract_ips(subnet, max_workers=100):
+        network = ipaddress.ip_network(subnet, strict=False)
+        ips = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(extract_ip, ip) for ip in network.hosts()]
+            for future in as_completed(futures):
+                ips.append(future.result())
+        return ips
+
+    print(f"Extracting IPs from {args.print_all_ips}...")
+    ips = extract_ips(args.print_all_ips)
+    
+    print(f"\nExtracted IPs from {args.print_all_ips}:")
+    for ip in ips:
+        print(f"{Fore.GREEN}{ip}{Fore.RESET}")
+    
+    print(f"\nTotal IPs: {len(ips)}")
+
+    save = input("Do you want to save these IPs to a file? (y/n): ").lower()
+    if save == 'y':
+        filename = input("Enter filename to save IPs: ")
+        with open(filename, 'w') as f:
+            for ip in ips:
+                f.write(f"{ip}\n")
+        print(f"IPs saved to {filename}")
