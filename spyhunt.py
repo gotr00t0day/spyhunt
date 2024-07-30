@@ -1106,7 +1106,7 @@ if args.xss_scan:
         "<svg/onload=alert('XSS')>"
     ]
     
-    parsed_url = urlparse(url)
+    parsed_url = urlparse(args.xss_scan)
     params = parse_qs(parsed_url.query)
     
     for param in params:
@@ -1126,5 +1126,4 @@ if args.xss_scan:
                 print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
 
     if __name__ == "__main__":
-        xss_scanner(args.xss_scan)  
-        
+        xss_scanner(args.xss_scan)
