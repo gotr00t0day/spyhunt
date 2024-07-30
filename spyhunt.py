@@ -5,7 +5,7 @@ from modules.favicon import *
 from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlencode, parse_qs
 from modules import useragent_list
 from modules import sub_output
 from googlesearch import search
@@ -71,6 +71,7 @@ def scan(command: str) -> str:
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
+update_group = parser.add_argument_group('Update')
 nuclei_group = parser.add_argument_group('Nuclei Scans')
 vuln_group = parser.add_argument_group('Vulnerability')
 crawlers_group = parser.add_argument_group('Crawlers')
@@ -230,6 +231,10 @@ portscanning_group.add_argument('-pai', '--print_all_ips',
                     type=str, help='Print all ips',
                     metavar='IP/24')
 
+vuln_group.add_argument('-xss', '--xss_scan',
+                 type=str, help='scan for XSS vulnerabilities',
+                 metavar='https://example.com/page?param=value')
+
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
@@ -238,12 +243,19 @@ fuzzing_group.add_argument("-e", "--extensions", help="Comma-separated list of f
 
 fuzzing_group.add_argument("-x", "--exclude", help="Comma-separated list of status codes to exclude", default="")
 
+update_group.add_argument('-u', '--update', action='store_true', help='Update the script')
+
 
 args = parser.parse_args()
 
 user_agent = useragent_list.get_useragent()
 header = {"User-Agent": user_agent}
 
+if args.update:
+    print(Fore.CYAN + "Updating the script...")
+    commands("git pull")
+    print(Fore.GREEN + "Script updated!")
+    sys.exit(0)
 
 if args.s:
     if args.save:
@@ -1035,7 +1047,7 @@ if args.cidr_notation:
                     for future in as_completed(futures):
                         ip, open_ports = future.result()
                         if open_ports:
-                            print(f"IP: {Fore.GREEN}{ip}:{Fore.CYAN}{",".join(map(str, open_ports))}{Fore.RESET}")
+                            print(f"IP: {Fore.GREEN}{ip}:{Fore.CYAN}{','.join(map(str, open_ports))}{Fore.RESET}")
 
             def parse_ports(ports):
                 if isinstance(ports, list):
@@ -1078,3 +1090,41 @@ if args.print_all_ips:
             for ip in ips:
                 f.write(f"{ip}\n")
         print(f"IPs saved to {filename}")
+
+
+if args.xss_scan:
+    def xss_scanner(url):
+        print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {url}{Fore.RESET}\n")
+    
+    # XSS test payloads
+    payloads = [
+        "<script>alert('XSS')</script>",
+        "';alert(String.fromCharCode(88,83,83))//';alert(String.fromCharCode(88,83,83))//\";"
+        "alert(String.fromCharCode(88,83,83))//\";alert(String.fromCharCode(88,83,83))//--"
+        "></SCRIPT>\">'><SCRIPT>alert(String.fromCharCode(88,83,83))</SCRIPT>",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg/onload=alert('XSS')>"
+    ]
+    
+    parsed_url = urlparse(url)
+    params = parse_qs(parsed_url.query)
+    
+    for param in params:
+        for payload in payloads:
+            test_params = params.copy()
+            test_params[param] = [payload]
+            test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
+            
+            try:
+                response = requests.get(test_url, verify=False, headers=header, timeout=10)
+                if payload in response.text:
+                    print(f"{Fore.RED}Potential XSS vulnerability found:{Fore.RESET}")
+                    print(f"  Parameter: {param}")
+                    print(f"  Payload: {payload}")
+                    print(f"  URL: {test_url}\n")
+            except requests.RequestException as e:
+                print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+
+    if __name__ == "__main__":
+        xss_scanner(args.xss_scan)  
+        
