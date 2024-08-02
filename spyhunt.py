@@ -5,7 +5,7 @@ from modules.favicon import *
 from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse, urljoin, urlencode, parse_qs
+from urllib.parse import urlparse, urljoin, urlencode, parse_qs, quote_plus
 from modules import useragent_list
 from modules import sub_output
 from googlesearch import search
@@ -33,6 +33,10 @@ import nmap3
 import json
 import shodan
 import ipaddress
+import random
+import string
+import html
+
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -1092,38 +1096,109 @@ if args.print_all_ips:
         print(f"IPs saved to {filename}")
 
 
-if args.xss_scan:
-    def xss_scanner(url):
-        print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {url}{Fore.RESET}\n")
-    
-    # XSS test payloads
-    payloads = [
-        "<script>alert('XSS')</script>",
-        "';alert(String.fromCharCode(88,83,83))//';alert(String.fromCharCode(88,83,83))//\";"
-        "alert(String.fromCharCode(88,83,83))//\";alert(String.fromCharCode(88,83,83))//--"
-        "></SCRIPT>\">'><SCRIPT>alert(String.fromCharCode(88,83,83))</SCRIPT>",
-        "<img src=x onerror=alert('XSS')>",
-        "<svg/onload=alert('XSS')>"
-    ]
-    
-    parsed_url = urlparse(args.xss_scan)
-    params = parse_qs(parsed_url.query)
-    
-    for param in params:
-        for payload in payloads:
-            test_params = params.copy()
-            test_params[param] = [payload]
-            test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
+if args.xss_scan: 
+    def generate_random_string(length=8):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+    def encode_payload(payload):
+        encodings = [
+            lambda x: x,  # No encoding
+            lambda x: quote_plus(x),  # URL encoding
+            lambda x: html.escape(x),  # HTML entity encoding
+            lambda x: ''.join(f'%{ord(c):02X}' for c in x),  # Full URL encoding
+            lambda x: ''.join(f'&#x{ord(c):02X};' for c in x),  # Hex entity encoding
+            lambda x: ''.join(f'\\u{ord(c):04X}' for c in x),  # Unicode escape
+        ]
+        return random.choice(encodings)(payload)
+
+    def print_vulnerability(vuln):
+        print(f"\n{Fore.RED}XSS vulnerability found:{Fore.RESET}")
+        print(f"URL: {Fore.CYAN}{vuln['url']}{Fore.RESET}")
+        print(f"Parameter: {Fore.YELLOW}{vuln['parameter']}{Fore.RESET}")
+        print(f"Payload: {Fore.MAGENTA}{vuln['payload']}{Fore.RESET}")
+        print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
+        print(f"Execution Likelihood: {Fore.RED if vuln['execution_likelihood'] == 'High' else Fore.YELLOW}{vuln['execution_likelihood']}{Fore.RESET}")
+
+    def xss_scan_url(url):
+        print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {url}{Fore.RESET}")
+        
+        payloads = [
+            "<script>alert('XSS')</script>",
+            "';alert(String.fromCharCode(88,83,83))//",
+            "<img src=x onerror=alert('XSS')>",
+            "<svg/onload=alert('XSS')>",
+            "javascript:alert('XSS')",
+            "<body onload=alert('XSS')>",
+            "<iframe src=\"javascript:alert('XSS')\">",
+            "<input type=\"text\" value=\"\" autofocus onfocus=\"alert('XSS')\">",
+        ]
+        
+        parsed_url = urlparse(url)
+        params = parse_qs(parsed_url.query)
+        
+        vulnerabilities = []
+        
+        for param in params:
+            for payload in payloads:
+                random_string = generate_random_string()
+                test_payload = payload.replace("XSS", random_string)
+                encoded_payload = encode_payload(test_payload)
+                
+                test_params = params.copy()
+                test_params[param] = [encoded_payload]
+                test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
+                
+                try:
+                    response = requests.get(test_url, verify=False, headers=header, timeout=10)
+                    response_text = response.text.lower()
+                    
+                    if random_string.lower() in response_text:
+                        vulnerability = {
+                            "url": url,
+                            "parameter": param,
+                            "payload": encoded_payload,
+                            "test_url": test_url
+                        }
+                        
+                        if re.search(r'<script>.*?alert\([\'"]{}[\'"]\).*?</script>'.format(random_string), response_text, re.IGNORECASE | re.DOTALL) or \
+                        re.search(r'on\w+\s*=.*?alert\([\'"]{}[\'"]\)'.format(random_string), response_text, re.IGNORECASE):
+                            vulnerability["execution_likelihood"] = "High"
+                        else:
+                            vulnerability["execution_likelihood"] = "Low"
+                        
+                        vulnerabilities.append(vulnerability)
+                        print_vulnerability(vulnerability)
+                except requests.RequestException as e:
+                    print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+        
+        return vulnerabilities
+
+    def xss_scanner(target):
+        if os.path.isfile(target):
+            with open(target, 'r') as file:
+                urls = [line.strip() for line in file if line.strip()]
             
-            try:
-                response = requests.get(test_url, verify=False, headers=header, timeout=10)
-                if payload in response.text:
-                    print(f"{Fore.RED}Potential XSS vulnerability found:{Fore.RESET}")
-                    print(f"  Parameter: {param}")
-                    print(f"  Payload: {payload}")
-                    print(f"  URL: {test_url}\n")
-            except requests.RequestException as e:
-                print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+            all_vulnerabilities = []
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_url = {executor.submit(xss_scan_url, url): url for url in urls}
+                for future in as_completed(future_to_url):
+                    url = future_to_url[future]
+                    try:
+                        vulnerabilities = future.result()
+                        all_vulnerabilities.extend(vulnerabilities)
+                    except Exception as exc:
+                        print(f'{Fore.RED}Error scanning {url}: {exc}{Fore.RESET}')
+            
+            return all_vulnerabilities
+        else:
+            return xss_scan_url(target)
+
 
     if __name__ == "__main__":
-        xss_scanner(args.xss_scan)
+        vulnerabilities = xss_scanner(args.xss_scan)
+        if not vulnerabilities:
+            print(f"\n{Fore.GREEN}No XSS vulnerabilities found.{Fore.RESET}")
+        else:
+            print(f"\n{Fore.RED}Total XSS vulnerabilities found: {len(vulnerabilities)}{Fore.RESET}")
+
+
