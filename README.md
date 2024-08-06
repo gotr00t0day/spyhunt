@@ -194,7 +194,7 @@ python3 spyhunt.py -ph domain.com?id=
 ```   
 sql injection
 ```
-python3 spyhunt.py -sq domain.com?id=1
+python3 spyhunt.py -sqli domain.com?id=1
 ```   
 xss
 ```
