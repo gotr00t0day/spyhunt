@@ -35,6 +35,7 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
    - Directory Traversal
    - SQL Injection
    - XSS
+   - Web Server Detection
 
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
 
