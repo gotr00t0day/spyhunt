@@ -252,6 +252,10 @@ parser.add_argument('-webserver', '--webserver_scan',
                     type=str, help='webserver scan',
                     metavar='domain.com')
 
+crawlers_group.add_argument('-javascript', '--javascript_scan',
+                    type=str, help='scan for sensitive info in javascript files',
+                    metavar='domain.com')
+
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
@@ -1446,6 +1450,109 @@ if args.webserver_scan:
 
     def main():
         detect_web_server(args.webserver_scan)
+
+    if __name__ == "__main__":
+        main()
+
+if args.javascript_scan:
+    init(autoreset=True)
+
+    def is_valid_url(url):
+        parsed = urlparse(url)
+        return bool(parsed.netloc) and bool(parsed.scheme)
+
+    def get_js_files(url):
+        js_files = set()
+        try:
+            response = requests.get(url, timeout=10)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Find <script> tags with src attribute
+            for script in soup.find_all('script', src=True):
+                script_url = urljoin(url, script['src'])
+                if is_valid_url(script_url):
+                    js_files.add(script_url)
+            
+            # Find JavaScript files in <link> tags
+            for link in soup.find_all('link', rel='stylesheet'):
+                if 'href' in link.attrs:
+                    css_url = urljoin(url, link['href'])
+                    if is_valid_url(css_url):
+                        css_response = requests.get(css_url, timeout=10)
+                        js_urls = re.findall(r'url\([\'"]?(.*?\.js)[\'"]?\)', css_response.text)
+                        for js_url in js_urls:
+                            full_js_url = urljoin(css_url, js_url)
+                            if is_valid_url(full_js_url):
+                                js_files.add(full_js_url)
+            
+            # Find JavaScript files mentioned in inline scripts
+            for script in soup.find_all('script'):
+                if script.string:
+                    js_urls = re.findall(r'[\'"]([^\'"]*\.js)[\'"]', script.string)
+                    for js_url in js_urls:
+                        full_js_url = urljoin(url, js_url)
+                        if is_valid_url(full_js_url):
+                            js_files.add(full_js_url)
+            
+        except requests.RequestException as e:
+            print(f"{Fore.RED}Error fetching {url}: {e}{Style.RESET_ALL}")
+        
+        return js_files
+
+    def analyze_js_file(js_url):
+        try:
+            response = requests.get(js_url, timeout=10)
+            content = response.text
+            size = len(content)
+            
+            # Analysis patterns
+            interesting_patterns = {
+                'API Keys': r'(?i)(?:api[_-]?key|apikey)["\s:=]+(["\'][a-zA-Z0-9_\-]{20,}["\'])',
+                'Passwords': r'(?i)(?:password|passwd|pwd)["\s:=]+(["\'][^"\']{8,}["\'])',
+                'Tokens': r'(?i)(?:token|access_token|auth_token)["\s:=]+(["\'][a-zA-Z0-9_\-]{20,}["\'])',
+                'Sensitive Functions': r'(?i)(eval|setTimeout|setInterval)\s*\([^)]+\)',
+            }
+            
+            findings = {}
+            for name, pattern in interesting_patterns.items():
+                matches = re.findall(pattern, content)
+                if matches:
+                    findings[name] = matches
+            
+            return js_url, size, findings
+        except requests.RequestException as e:
+            return js_url, None, f"Error: {e}"
+
+    def main():
+        print(f"Scanning {Fore.GREEN}{args.javascript_scan} {Fore.WHITE}for JavaScript files...{Style.RESET_ALL}")
+        
+        js_files = get_js_files(args.javascript_scan)
+        if not js_files:
+            print(f"{Fore.YELLOW}No JavaScript files found.{Style.RESET_ALL}")
+            return
+        
+        print(f"{Fore.GREEN}Found {len(js_files)} JavaScript files. Analyzing...{Style.RESET_ALL}\n")
+        
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
+            results = list(executor.map(analyze_js_file, js_files))
+        
+        for url, size, findings in results:
+            print(f"{Fore.MAGENTA}File: {url}{Style.RESET_ALL}")
+            if size is not None:
+                print(f"Size: {size} bytes")
+                if findings:
+                    print("Potential sensitive information:")
+                    for name, matches in findings.items():
+                        print(f"  - {name}:")
+                        for match in matches[:5]:  # Limit to first 5 matches to avoid overwhelming output
+                            print(f"    {match}")
+                        if len(matches) > 5:
+                            print(f"    ... and {len(matches) - 5} more")
+                else:
+                    print("No potential sensitive information found.")
+            else:
+                print(f"{Fore.RED}{findings}{Style.RESET_ALL}")
+            print()
 
     if __name__ == "__main__":
         main()

@@ -36,6 +36,7 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
    - SQL Injection
    - XSS
    - Web Server Detection
+   - JavaScript file scanning for sensitive info
 
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
 
@@ -200,4 +201,8 @@ python3 spyhunt.py -sqli domain.com?id=1
 xss
 ```
 python3 spyhunt.py -xss domain.com?id=1
-```   
+```
+JavaScript file scanning for sensitive info
+```
+python3 spyhunt.py -javascript domain.com
+```
