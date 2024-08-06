@@ -1,4 +1,4 @@
-from colorama import Fore
+from colorama import Fore, init, Style
 from os import path
 from builtwith import builtwith
 from modules.favicon import *
@@ -10,6 +10,10 @@ from modules import useragent_list
 from modules import sub_output
 from googlesearch import search
 from alive_progress import alive_bar
+from queue import Queue
+from shutil import which
+from collections import defaultdict
+from datetime import datetime
 import threading
 import os.path
 import concurrent.futures
@@ -38,6 +42,7 @@ import string
 import html
 
 
+
 warnings.filterwarnings(action='ignore',module='bs4')
 
 requests.packages.urllib3.disable_warnings()
@@ -51,7 +56,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.12
+V 2.0
 By c0deninja
 
 """
@@ -104,8 +109,8 @@ passiverecon_group.add_argument('-t', '--tech',
                     metavar='domain.com')
 
 passiverecon_group.add_argument('-d', '--dns',
-                    type=str, help='scan for dns records',
-                    metavar='domain.com')
+                    type=str, help='scan a list of domains for dns records',
+                    metavar='domains.txt')
 
 parser.add_argument('-p', '--probe',
                     type=str, help='probe domains.',
@@ -183,10 +188,6 @@ vuln_group.add_argument('-smu', '--smuggler',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
 
-parser.add_argument('-rd', '--redirect',
-                    type=str, help='get redirect links',
-                    metavar='domain list')
-
 passiverecon_group.add_argument('-ips', '--ipaddresses',
                     type=str, help='get the ips from a list of domains',
                     metavar='domain list')
@@ -238,6 +239,18 @@ portscanning_group.add_argument('-pai', '--print_all_ips',
 vuln_group.add_argument('-xss', '--xss_scan',
                  type=str, help='scan for XSS vulnerabilities',
                  metavar='https://example.com/page?param=value')
+
+vuln_group.add_argument('-sqli', '--sqli_scan',
+                 type=str, help='scan for SQLi vulnerabilities',
+                 metavar='https://example.com/page?param=value')
+
+passiverecon_group.add_argument('-shodan', '--shodan_api',
+                    type=str, help='shodan api key',
+                    metavar='KEY')
+
+parser.add_argument('-webserver', '--webserver_scan',
+                    type=str, help='webserver scan',
+                    metavar='domain.com')
 
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
@@ -579,6 +592,9 @@ if args.probe:
 if args.redirects:
     if args.save:
         print(Fore.CYAN + "Saving output to {}}..".format(args.save))
+        if which("httpx"):
+            print("Please uninstall httpx and install httpx-toolkit from https://github.com/projectdiscovery/httpx-toolkit")
+            sys.exit()
         commands(f"cat {args.redirects} | httpx -silent -location -mc 301,302 | anew >> redirects.txt")
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
@@ -612,19 +628,6 @@ if args.tech:
 if args.smuggler:
     smug_path = os.path.abspath(os.getcwd())
     commands(f"python3 {smug_path}/tools/smuggler/smuggler.py -u {args.smuggler} -q")
-
-if args.redirect:
-    user_agent = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/44.0.2403.155 Safari/537.36"
-    header = {'User Agent': f'{user_agent}'}
-    path = os.getcwd()
-    with open(f"{path}/{args.redirect}") as f:
-        domain_list = {x.strip() for x in f.readlines()}
-    for domainlist in domain_list:
-            r = requests.get(f"{domainlist}", verify=False, headers=header)
-            if r.status_code == 301 or r.status_code == 302:
-                print(f"{Fore.GREEN}{domainlist}")
-            else:
-                print(domainlist)
 
 if args.ipaddresses:
     ip_list = []
@@ -1159,7 +1162,6 @@ if args.xss_scan:
                             "payload": encoded_payload,
                             "test_url": test_url
                         }
-                        
                         if re.search(r'<script>.*?alert\([\'"]{}[\'"]\).*?</script>'.format(random_string), response_text, re.IGNORECASE | re.DOTALL) or \
                         re.search(r'on\w+\s*=.*?alert\([\'"]{}[\'"]\)'.format(random_string), response_text, re.IGNORECASE):
                             vulnerability["execution_likelihood"] = "High"
@@ -1202,3 +1204,248 @@ if args.xss_scan:
             print(f"\n{Fore.RED}Total XSS vulnerabilities found: {len(vulnerabilities)}{Fore.RESET}")
 
 
+if args.sqli_scan:
+    init(autoreset=True)
+
+    def generate_random_string(length=8):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+    def encode_payload(payload):
+        encodings = [
+            lambda x: x,  # No encoding
+            lambda x: quote_plus(x),  # URL encoding
+            lambda x: ''.join(f'%{ord(c):02X}' for c in x),  # Full URL encoding
+        ]
+        return random.choice(encodings)(payload)
+
+    def print_vulnerability(vuln):
+        print(f"\n{Fore.RED}SQL Injection vulnerability found:{Fore.RESET}")
+        print(f"URL: {Fore.CYAN}{vuln['url']}{Fore.RESET}")
+        print(f"Parameter: {Fore.YELLOW}{vuln['parameter']}{Fore.RESET}")
+        print(f"Payload: {Fore.MAGENTA}{vuln['payload']}{Fore.RESET}")
+        print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
+        print(f"Type: {Fore.GREEN}{vuln['type']}{Fore.RESET}")
+
+    def sqli_scan_url(url, print_queue):
+        print_queue.put(f"{Fore.CYAN}Scanning for SQL injection vulnerabilities: {url}{Fore.RESET}")
+        
+        parsed_url = urlparse(url)
+        params = parse_qs(parsed_url.query)
+        
+        for param in params:
+            # Error-based SQLi
+            error_payloads = [
+                "' OR '1'='1",
+                "' OR '1'='1' --",
+                "' UNION SELECT NULL, NULL, NULL --",
+                "1' ORDER BY 1--+",
+                "1' ORDER BY 2--+",
+                "1' ORDER BY 3--+",
+                "1 UNION SELECT NULL, NULL, NULL --",
+            ]
+            
+            for payload in error_payloads:
+                encoded_payload = encode_payload(payload)
+                test_params = params.copy()
+                test_params[param] = [encoded_payload]
+                test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
+                
+                try:
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+                    response = requests.get(test_url, verify=False, headers=headers, timeout=10)
+                    
+                    sql_errors = [
+                        r"SQL syntax.*MySQL", r"Warning.*mysql_.*", r"valid MySQL result",
+                        r"MySqlClient\.", r"PostgreSQL.*ERROR", r"Warning.*\Wpg_.*",
+                        r"valid PostgreSQL result", r"Npgsql\.", r"Driver.*SQL SERVER",
+                        r"OLE DB.*SQL SERVER", r"SQL Server.*Driver", r"Warning.*mssql_.*",
+                        r"Microsoft SQL Native Client error '[0-9a-fA-F]{8}",
+                        r"ODBC SQL Server Driver", r"SQLServer JDBC Driver", r"Oracle error",
+                        r"Oracle.*Driver", r"Warning.*\Woci_.*", r"Warning.*\Wora_.*"
+                    ]
+                    
+                    for error in sql_errors:
+                        if re.search(error, response.text, re.IGNORECASE):
+                            vulnerability = {
+                                "url": url,
+                                "parameter": param,
+                                "payload": encoded_payload,
+                                "test_url": test_url,
+                                "type": "Error-based SQLi"
+                            }
+                            print_queue.put(vulnerability)
+                            return  # Exit after finding a vulnerability
+                    
+                except requests.RequestException as e:
+                    print_queue.put(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+            
+            # Boolean-based blind SQLi
+            original_params = params.copy()
+            original_params[param] = ["1 AND 1=1"]
+            true_url = parsed_url._replace(query=urlencode(original_params, doseq=True)).geturl()
+            
+            original_params[param] = ["1 AND 1=2"]
+            false_url = parsed_url._replace(query=urlencode(original_params, doseq=True)).geturl()
+            
+            try:
+                true_response = requests.get(true_url, verify=False, headers=headers, timeout=10)
+                false_response = requests.get(false_url, verify=False, headers=headers, timeout=10)
+                
+                if true_response.text != false_response.text:
+                    vulnerability = {
+                        "url": url,
+                        "parameter": param,
+                        "payload": "1 AND 1=1 / 1 AND 1=2",
+                        "test_url": f"{true_url} / {false_url}",
+                        "type": "Boolean-based blind SQLi"
+                    }
+                    print_queue.put(vulnerability)
+                    return  # Exit after finding a vulnerability
+            
+            except requests.RequestException as e:
+                print_queue.put(f"{Fore.YELLOW}Error during boolean-based test for {url}: {str(e)}{Fore.RESET}")
+            
+            # Time-based blind SQLi
+            time_payload = "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a) AND '1'='1"
+            encoded_time_payload = encode_payload(time_payload)
+            time_params = params.copy()
+            time_params[param] = [encoded_time_payload]
+            time_url = parsed_url._replace(query=urlencode(time_params, doseq=True)).geturl()
+            
+            try:
+                start_time = time.time()
+                response = requests.get(time_url, verify=False, headers=headers, timeout=10)
+                end_time = time.time()
+                
+                if end_time - start_time >= 5:
+                    vulnerability = {
+                        "url": url,
+                        "parameter": param,
+                        "payload": time_payload,
+                        "test_url": time_url,
+                        "type": "Time-based blind SQLi"
+                    }
+                    print_queue.put(vulnerability)
+                    return  # Exit after finding a vulnerability
+            
+            except requests.RequestException as e:
+                print_queue.put(f"{Fore.YELLOW}Error during time-based test for {url}: {str(e)}{Fore.RESET}")
+
+    def print_worker(print_queue):
+        while True:
+            item = print_queue.get()
+            if item is None:
+                break
+            if isinstance(item, dict):
+                print_vulnerability(item)
+            else:
+                print(item)
+            print_queue.task_done()
+
+    def sqli_scanner(target):
+        print_queue = Queue()
+        print_thread = threading.Thread(target=print_worker, args=(print_queue,))
+        print_thread.start()
+
+        if os.path.isfile(target):
+            with open(target, 'r') as file:
+                urls = [line.strip() for line in file if line.strip()]
+            
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(sqli_scan_url, url, print_queue) for url in urls]
+                for future in as_completed(futures):
+                    future.result()
+        else:
+            sqli_scan_url(target, print_queue)
+
+        print_queue.put(None)
+        print_thread.join()
+
+    if __name__ == "__main__":
+        sqli_scanner(args.sqli_scan)
+
+        print(f"\n{Fore.GREEN}Scan completed.{Fore.RESET}")
+
+
+if args.webserver_scan:
+    init(autoreset=True)
+
+    def get_server_info(url, path=''):
+        full_url = urljoin(url, path)
+        try:
+            response = requests.get(full_url, allow_redirects=False, timeout=10)
+            return response.headers, response.status_code, response.text
+        except requests.RequestException:
+            return {}, None, ''
+
+    def analyze_headers(headers):
+        server_info = {}
+        for header, value in headers.items():
+            if header.lower() == 'server':
+                server_info['Server'] = value
+            elif header.lower() == 'x-powered-by':
+                server_info['X-Powered-By'] = value
+            elif header.lower() == 'x-aspnet-version':
+                server_info['ASP.NET'] = value
+            elif header.lower() == 'x-generator':
+                server_info['Generator'] = value
+        return server_info
+
+    def check_specific_files(url):
+        files_to_check = {
+            '/favicon.ico': {'Apache': 'Apache', 'Nginx': 'Nginx'},
+            '/server-status': {'Apache': 'Apache Status'},
+            '/nginx_status': {'Nginx': 'Nginx Status'},
+            '/web.config': {'IIS': 'IIS Config'},
+            '/phpinfo.php': {'PHP': 'PHP Version'}
+        }
+        
+        results = {}
+        for file, signatures in files_to_check.items():
+            headers, status, content = get_server_info(url, file)
+            if status == 200:
+                for server, signature in signatures.items():
+                    if signature in content:
+                        results[server] = f"Detected via {file}"
+        return results
+
+    def detect_web_server(url):
+        if not url.startswith('http'):
+            url = 'http://' + url
+
+        print(f"Scanning {Fore.GREEN}{url}{Fore.WHITE}...{Style.RESET_ALL}")
+
+        headers, status, content = get_server_info(url)
+        
+        if status is None:
+            print(f"{Fore.RED}Error: Unable to connect to the server{Style.RESET_ALL}")
+            return
+
+        server_info = analyze_headers(headers)
+        
+        if 'Server' not in server_info:
+            if 'Set-Cookie' in headers and 'ASPSESSIONID' in headers['Set-Cookie']:
+                server_info['Likely'] = 'IIS'
+            elif 'Set-Cookie' in headers and 'PHPSESSID' in headers['Set-Cookie']:
+                server_info['Likely'] = 'PHP'
+        
+        file_results = check_specific_files(url)
+        server_info.update(file_results)
+
+        if server_info:
+            for key, value in server_info.items():
+                print(f"{Fore.GREEN}{key}:{Style.RESET_ALL} {Fore.YELLOW}{value}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.RED}Unable to determine web server{Style.RESET_ALL}")
+
+        if 'CF-RAY' in headers:
+            print(f"{Fore.GREEN}Cloudflare detected{Style.RESET_ALL}")
+        
+        if 'X-Varnish' in headers:
+            print(f"{Fore.GREEN}Varnish Cache detected{Style.RESET_ALL}")
+
+    def main():
+        detect_web_server(args.webserver_scan)
+
+    if __name__ == "__main__":
+        main()

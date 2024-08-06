@@ -32,6 +32,9 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
    - Directory and file brute-forcing
    - Local File Inclusion (LFI) scanning with Nuclei
    - Google dorking
+   - Directory Traversal
+   - SQL Injection
+   - XSS
 
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
 
@@ -122,7 +125,7 @@ options:
                         extract parameters from a domain
   -nft domains.txt, --not_found domains.txt
                         check for 404 status code
-  -ph domain.txt, --pathhunt domain.txt
+  -ph domain.com, --pathhunt domain.com?id=
                         check for directory traversal      
   -n domain.com or IP, --nmap domain.com or IP
                         Scan a target with nmap
@@ -131,7 +134,11 @@ options:
   -sho domain.com, --shodan domain.com
                         Recon with shodan
   -fp domain.com, --forbiddenpass domain.com
-                        Bypass 403 forbidden        
+                        Bypass 403 forbidden   
+   -sq domain.com, --sql domain.com
+                        sql injection
+  -xss domain.com, --xss domain.com
+                        xss
 ```
 
 
@@ -147,7 +154,7 @@ python3 spyhunt.py -j yahoo.com
 ```
 Scan for dns records
 ```
-python3 spyhunt.py -d yahoo.com
+python3 spyhunt.py -d domains.txt
 ```
 Scan for FavIcon hashes 
 ```
@@ -173,6 +180,23 @@ Directory Brute Forcing
 ```
 python3 spyhunt.py --directorybrute domain.com --wordlist list.txt --threads 50 -e php,txt,html -x 404,403
 ```
+Directory Brute Forcing with no extensions
+```
+python3 spyhunt.py --directorybrute domain.com --wordlist list.txt --threads 50 -x 404,403
+```
 Scanning a subnet
 ```
 python3 spyhunt.py --cidr_notation IP/24 --ports 80,443 --threads 200
+```
+Directory Traversal
+```
+python3 spyhunt.py -ph domain.com?id=
+```   
+sql injection
+```
+python3 spyhunt.py -sq domain.com?id=1
+```   
+xss
+```
+python3 spyhunt.py -xss domain.com?id=1
+```   
