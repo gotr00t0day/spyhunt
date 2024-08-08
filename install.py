@@ -138,14 +138,6 @@ def main():
     # Install jq
     install_tool("jq", lambda: install_package("jq", package_manager))
 
-    # Install aquatone
-    if not which("aquatone"):
-        run_command("wget -O aquatone.zip https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip")
-        run_command("unzip aquatone.zip")
-        run_command("sudo mv aquatone /usr/local/bin/")
-        run_command("rm aquatone.zip")
-        print(f"{Fore.GREEN}aquatone installed successfully{Fore.RESET}")
-
     # Install shodan
     install_tool("shodan", lambda: install_package("shodan", "pip"))
 
