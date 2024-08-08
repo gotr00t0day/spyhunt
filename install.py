@@ -8,7 +8,10 @@ init(autoreset=True)
 
 def run_command(cmd):
     try:
-        return subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
+        print(f"{Fore.CYAN}Running command: {cmd}{Fore.RESET}")
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
+        print(f"{Fore.GREEN}Command output: {output.strip()}{Fore.RESET}")
+        return output
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Failed to run command: {cmd}")
         print(f"Error: {e.output}")
@@ -54,30 +57,43 @@ def install_tool(name, install_cmd, check_cmd=None):
     if check_cmd is None:
         check_cmd = name
     if not which(check_cmd):
-        print(f"{Fore.YELLOW}Installing {name}...")
+        print(f"{Fore.YELLOW}Installing {name}...{Fore.RESET}")
         result = install_cmd()
         if result is not None:
-            print(f"{Fore.GREEN}{name} installed successfully")
+            print(f"{Fore.GREEN}{name} installed successfully{Fore.RESET}")
         else:
-            print(f"{Fore.RED}Failed to install {name}")
+            print(f"{Fore.RED}Failed to install {name}{Fore.RESET}")
     else:
-        print(f"{Fore.GREEN}Found {name}")
+        print(f"{Fore.GREEN}Found {name}{Fore.RESET}")
+
+def install_go_tool(tool, package):
+    print(f"{Fore.YELLOW}Installing {tool}...{Fore.RESET}")
+    if run_command(f"go install {package}") is not None:
+        go_path = run_command("go env GOPATH").strip()
+        bin_path = os.path.join(go_path, "bin", tool)
+        if os.path.exists(bin_path):
+            run_command(f"sudo mv {bin_path} /usr/local/bin/")
+            print(f"{Fore.GREEN}{tool} installed successfully{Fore.RESET}")
+        else:
+            print(f"{Fore.RED}Failed to find {tool} in GOPATH{Fore.RESET}")
+    else:
+        print(f"{Fore.RED}Failed to install {tool}{Fore.RESET}")
 
 def main():
     system = platform.system()
     if system == "Linux":
         package_manager = detect_package_manager()
         if package_manager is None:
-            print(f"{Fore.RED}Unable to detect package manager. Please install packages manually.")
+            print(f"{Fore.RED}Unable to detect package manager. Please install packages manually.{Fore.RESET}")
             return
-        print(f"{Fore.GREEN}Detected package manager: {package_manager}")
+        print(f"{Fore.GREEN}Detected package manager: {package_manager}{Fore.RESET}")
     elif system == "Darwin":  # macOS
         package_manager = "brew"
         if not which("brew"):
-            print(f"{Fore.RED}Homebrew is required for macOS. Please install it first.")
+            print(f"{Fore.RED}Homebrew is required for macOS. Please install it first.{Fore.RESET}")
             return
     else:
-        print(f"{Fore.RED}Unsupported operating system: {system}")
+        print(f"{Fore.RED}Unsupported operating system: {system}{Fore.RESET}")
         return
 
     home = os.path.expanduser("~")
@@ -96,7 +112,7 @@ def main():
     install_tool("blc", lambda: install_package("broken-link-checker", "npm"))
 
     # Install nuclei
-    install_tool("nuclei", lambda: run_command("go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest"))
+    install_go_tool("nuclei", "github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest")
 
     # Clone nuclei-templates
     if not os.path.exists(os.path.join(home, "nuclei-templates")):
@@ -117,7 +133,7 @@ def main():
     ]
 
     for tool, go_package in tools:
-        install_tool(tool, lambda t=tool, p=go_package: install_package(p, "go") and run_command(f"sudo mv $(go env GOPATH)/bin/{t} /usr/local/bin/"))
+        install_go_tool(tool, go_package)
 
     # Install jq
     install_tool("jq", lambda: install_package("jq", package_manager))
@@ -128,7 +144,7 @@ def main():
         run_command("unzip aquatone.zip")
         run_command("sudo mv aquatone /usr/local/bin/")
         run_command("rm aquatone.zip")
-        print(f"{Fore.GREEN}aquatone installed successfully")
+        print(f"{Fore.GREEN}aquatone installed successfully{Fore.RESET}")
 
     # Install shodan
     install_tool("shodan", lambda: install_package("shodan", "pip"))
