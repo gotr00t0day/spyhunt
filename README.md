@@ -206,3 +206,7 @@ JavaScript file scanning for sensitive info
 ```
 python3 spyhunt.py -javascript domain.com
 ```
+Javascript endpoint fuzzing
+```
+python3 spyhunt.py -javascript_endpoint domains.txt -c 20 --save filename.txt
+```
