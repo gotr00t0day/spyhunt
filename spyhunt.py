@@ -39,7 +39,8 @@ import ipaddress
 import random
 import string
 import html
-
+import asyncio
+import aiohttp
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -254,6 +255,16 @@ parser.add_argument('-webserver', '--webserver_scan',
 crawlers_group.add_argument('-javascript', '--javascript_scan',
                     type=str, help='scan for sensitive info in javascript files',
                     metavar='domain.com')
+
+crawlers_group.add_argument('-dp', '--depth',
+                    type=str, help='depth of the crawl',
+                    metavar='10')
+
+crawlers_group.add_argument('-je', '--javascript_endpoints',
+                    type=str, help='extract javascript endpoints',
+                    metavar='file.txt')
+
+parser.add_argument("-c", "--concurrency", type=int, default=10, help="Maximum number of concurrent requests")
 
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
@@ -551,17 +562,140 @@ if args.waybackurls:
         commands(f"waybackurls {args.waybackurls}")
 
 if args.j:
-    if args.save:
-        print(Fore.CYAN + "Saving output to {}".format(args.save))
-        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | uniq | sort >> {args.save}")
-        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew >> {args.save}")
-        if path.exists(f"{args.save}"):
-            print(Fore.GREEN + "DONE!")
-        if not path.exists(f"{args.save}"):
-            print(Fore.RED + "ERROR!")
-    else:
-        commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
-        commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
+    init(autoreset=True)
+
+    async def fetch(session, url):
+        try:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    return await response.text()
+                elif response.status == 404:
+                    # Silently ignore 404 errors
+                    return None
+                else:
+                    print(f"{Fore.YELLOW}Warning: {url} returned status code {response.status}{Style.RESET_ALL}")
+                    return None
+        except aiohttp.ClientError as e:
+            print(f"{Fore.RED}Error fetching {url}: {e}{Style.RESET_ALL}")
+        except asyncio.TimeoutError:
+            print(f"{Fore.RED}Timeout error fetching {url}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}Unexpected error fetching {url}: {e}{Style.RESET_ALL}")
+        return None
+
+    def is_valid_url(url):
+        try:
+            parsed = urlparse(url)
+            return bool(parsed.netloc) and bool(parsed.scheme)
+        except Exception as e:
+            print(f"{Fore.RED}Error parsing URL {url}: {e}{Style.RESET_ALL}")
+            return False
+
+    def is_same_domain(url, domain):
+        try:
+            return urlparse(url).netloc == domain
+        except Exception as e:
+            print(f"{Fore.RED}Error comparing domains for {url}: {e}{Style.RESET_ALL}")
+            return False
+
+    async def get_js_links(session, url, domain):
+        js_links = set()
+        new_links = set()
+        html = await fetch(session, url)
+        if html:
+            try:
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                for script in soup.find_all('script', src=True):
+                    script_url = urljoin(url, script['src'])
+                    if is_valid_url(script_url) and is_same_domain(script_url, domain):
+                        js_links.add(script_url)
+                
+                for script in soup.find_all('script'):
+                    if script.string:
+                        js_urls = re.findall(r'[\'"]([^\'"]*\.js)[\'"]', script.string)
+                        for js_url in js_urls:
+                            full_js_url = urljoin(url, js_url)
+                            if is_valid_url(full_js_url) and is_same_domain(full_js_url, domain):
+                                js_links.add(full_js_url)
+                
+                new_links = set(urljoin(url, link['href']) for link in soup.find_all('a', href=True))
+            except Exception as e:
+                print(f"{Fore.RED}Error parsing HTML from {url}: {e}{Style.RESET_ALL}")
+        
+        return js_links, new_links
+
+    async def crawl_website(url, max_depth, concurrency):
+        try:
+            domain = urlparse(url).netloc
+            visited = set()
+            to_visit = {url}
+            js_files = set()
+            semaphore = asyncio.Semaphore(concurrency)
+
+            async def bounded_get_js_links(session, url, domain):
+                async with semaphore:
+                    return await get_js_links(session, url, domain)
+
+            async with aiohttp.ClientSession() as session:
+                for depth in range(int(max_depth) + 1):
+                    if not to_visit:
+                        break
+
+                    tasks = [bounded_get_js_links(session, url, domain) for url in to_visit]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    visited.update(to_visit)
+                    to_visit = set()
+
+                    for result in results:
+                        if isinstance(result, Exception):
+                            print(f"{Fore.RED}Error during crawl: {result}{Style.RESET_ALL}")
+                            continue
+                        js_links, new_links = result
+                        js_files.update(js_links)
+                        to_visit.update(link for link in new_links 
+                                        if is_valid_url(link) and is_same_domain(link, domain) and link not in visited)
+
+                    print(f"{Fore.CYAN}Depth {depth}: Found {len(js_files)} JS files, {len(to_visit)} new URLs to visit{Style.RESET_ALL}")
+
+            return js_files
+        except Exception as e:
+            print(f"{Fore.RED}Unexpected error during crawl: {e}{Style.RESET_ALL}")
+            return set()
+
+    async def main():
+        try:
+            print(f"{Fore.CYAN}Crawling {Fore.GREEN}{args.j}{Fore.CYAN} for JavaScript files...{Style.RESET_ALL}\n")
+            js_files = await crawl_website(args.j, args.depth, args.concurrency)
+
+            if js_files:
+                print(f"\n{Fore.YELLOW}Found {len(js_files)} JavaScript files:{Style.RESET_ALL}")
+                for js_file in sorted(js_files):
+                    print(js_file)
+
+                if args.save:
+                    try:
+                        with open(args.save, 'w') as f:
+                            for js_file in sorted(js_files):
+                                f.write(f"{js_file}\n")
+                        print(f"\n{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+                    except IOError as e:
+                        print(f"{Fore.RED}Error saving results to file: {e}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.RED}No JavaScript files found.{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}Unexpected error in main function: {e}{Style.RESET_ALL}")
+
+    if __name__ == "__main__":
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            print(f"{Fore.YELLOW}Crawl interrupted by user.{Style.RESET_ALL}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"{Fore.RED}Fatal error: {e}{Style.RESET_ALL}")
+            sys.exit(1)
 
 if args.dns:
     if args.save:
@@ -1555,3 +1689,97 @@ if args.javascript_scan:
 
     if __name__ == "__main__":
         main()
+
+if args.javascript_endpoints:
+
+    init(autoreset=True)
+
+    async def fetch(session, url):
+        try:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    return await response.text()
+                else:
+                    pass
+                    return None
+        except aiohttp.ClientError as e:
+            print(f"{Fore.RED}Error fetching {url}: {e}{Style.RESET_ALL}")
+        except asyncio.TimeoutError:
+            print(f"{Fore.RED}Timeout error fetching {url}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}Unexpected error fetching {url}: {e}{Style.RESET_ALL}")
+        return None
+
+    def find_endpoints(js_content):
+        # This regex pattern looks for common endpoint patterns in JavaScript
+        endpoint_pattern = r'(?:"|\'|\`)(/(?:api/)?[\w-]+(?:/[\w-]+)*(?:\.\w+)?)'
+        endpoints = set(re.findall(endpoint_pattern, js_content))
+        return endpoints
+
+    async def analyze_js_file(session, js_url):
+        js_content = await fetch(session, js_url)
+        if js_content:
+            endpoints = find_endpoints(js_content)
+            return js_url, endpoints
+        return js_url, set()
+
+    async def process_js_files(file_path, concurrency):
+        js_files = {}
+        
+        try:
+            with open(file_path, 'r') as file:
+                js_urls = [line.strip() for line in file if line.strip()]
+
+            async with aiohttp.ClientSession() as session:
+                semaphore = asyncio.Semaphore(concurrency)
+                
+                async def bounded_analyze_js_file(js_url):
+                    async with semaphore:
+                        return await analyze_js_file(session, js_url)
+                
+                tasks = [bounded_analyze_js_file(js_url) for js_url in js_urls]
+                results = await asyncio.gather(*tasks)
+
+                for js_url, endpoints in results:
+                    js_files[js_url] = endpoints
+
+        except Exception as e:
+            print(f"{Fore.RED}Error processing JS file list: {e}{Style.RESET_ALL}")
+
+        return js_files
+
+    async def main():
+        print(f"{Fore.CYAN}Analyzing JavaScript files from {Fore.GREEN}{args.javascript_endpoints}{Style.RESET_ALL}\n")
+        js_files = await process_js_files(args.javascript_endpoints, args.concurrency)
+
+        if js_files:
+            print(f"\n{Fore.YELLOW}Analyzed {len(js_files)} JavaScript files:{Style.RESET_ALL}")
+            for js_url, endpoints in js_files.items():
+                print(f"\n{Fore.CYAN}{js_url}{Style.RESET_ALL}")
+                if endpoints:
+                    print(f"{Fore.GREEN}Endpoints found:{Style.RESET_ALL}")
+                    for endpoint in sorted(endpoints):
+                        print(f"  {endpoint}")
+                else:
+                    print(f"{Fore.YELLOW}No endpoints found{Style.RESET_ALL}")
+
+            if args.save:
+                try:
+                    with open(args.save, 'w') as f:
+                        for js_url, endpoints in js_files.items():
+                            f.write(f"{js_url}\n")
+                            if endpoints:
+                                f.write("Endpoints:\n")
+                                for endpoint in sorted(endpoints):
+                                    f.write(f"  {endpoint}\n")
+                            else:
+                                f.write("No endpoints found\n")
+                            f.write("\n")
+                    print(f"\n{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+                except IOError as e:
+                    print(f"{Fore.RED}Error saving results to file: {e}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.RED}No JavaScript files were successfully analyzed.{Style.RESET_ALL}")
+
+    if __name__ == "__main__":
+        asyncio.run(main()) 
