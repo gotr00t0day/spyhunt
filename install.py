@@ -142,7 +142,7 @@ def main():
     install_tool("shodan", lambda: install_package("shodan", "pip"))
 
     # Install paramspider
-    install_tool("paramspider", lambda: run_command("git clone https://github.com/devanshbatham/paramspider && cd paramspider && python3 setup.py install"))
+    install_tool("paramspider", lambda: run_command("git clone https://github.com/devanshbatham/ParamSpider && cd ParamSpider && python3 setup.py install"))
 
 if __name__ == "__main__":
     main()
