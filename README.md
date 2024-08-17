@@ -152,7 +152,7 @@ python3 spyhunt.py -s yahoo.com --save filename.txt
 ```
 Scan for javascript files 
 ```
-python3 spyhunt.py -j yahoo.com
+python3 spyhunt.py -j yahoo.com --depth 4 --save jsfiles.txt -c 20
 ```
 Scan for dns records
 ```
