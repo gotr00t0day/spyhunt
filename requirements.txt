@@ -10,3 +10,4 @@ fake-useragent
 googlesearch-python
 alive-progress
 python-whois
+aiohttp
