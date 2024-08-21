@@ -1,22 +1,20 @@
-import platform, subprocess, os, time
-from shutil import which
+import platform, os, time
+from shutil import which, move
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, init
+from pathlib import Path
+import requests
+import git
 
 init(autoreset=True)
 
-def run_command(cmd):
-    try:
-        print(f"{Fore.CYAN}Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}{Fore.RESET}")
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, universal_newlines=True)
-        print(f"{Fore.GREEN}{output.strip()}{Fore.RESET}")
-        return output
-    except subprocess.CalledProcessError as e:
-        print(f"{Fore.RED}Error: {e.output.strip()}{Fore.RESET}")
-        return None
+def run_command_alternative(cmd):
+    """An alternative for subprocess that prints instructions instead of executing shell commands."""
+    print(f"{Fore.YELLOW}To run the command: {' '.join(cmd)} manually on your system.{Fore.RESET}")
+    return None
 
 def detect_package_manager():
-    if os.path.exists("/data/data/com.termux/files/usr"):
+    if Path("/data/data/com.termux/files/usr").exists():
         return "pkg"
     for pm in ["apt", "dnf", "yum", "pacman", "zypper", "apk", "brew", "choco"]:
         if which(pm):
@@ -24,6 +22,7 @@ def detect_package_manager():
     return None
 
 def install_package(package, manager):
+    # Alternative: We provide the command to the user as output
     commands = {
         "apt": ["sudo", "apt", "install", "-y", package],
         "dnf": ["sudo", "dnf", "install", "-y", package],
@@ -35,7 +34,7 @@ def install_package(package, manager):
         "brew": ["brew", "install", package],
         "choco": ["choco", "install", package, "-y"]
     }
-    return run_command(commands.get(manager))
+    run_command_alternative(commands.get(manager))
 
 def install_tool(name, install_cmd, check_cmd=None):
     check_cmd = check_cmd or name
@@ -45,15 +44,39 @@ def install_tool(name, install_cmd, check_cmd=None):
     else:
         print(f"{Fore.GREEN}{name} is already installed{Fore.RESET}")
 
-def install_go_tool(tool, package, retries=3, delay=5):
+def download_and_extract(url, extract_to='.', strip_components=0):
+    local_filename = url.split('/')[-1]
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+    if tarfile.is_tarfile(local_filename):
+        with tarfile.open(local_filename, 'r:*') as tar:
+            members = tar.getmembers()
+            if strip_components > 0:
+                for member in members:
+                    member.path = Path(*Path(member.path).parts[strip_components:])
+            tar.extractall(path=extract_to, members=members)
+    elif zipfile.is_zipfile(local_filename):
+        with zipfile.ZipFile(local_filename, 'r') as zip_ref:
+            zip_ref.extractall(extract_to)
+
+    os.remove(local_filename)
+
+def install_go_tool(tool, repo_url, retries=3, delay=5):
     for _ in range(retries):
-        if run_command(["go", "install", package]) is not None:
-            go_path = run_command(["go", "env", "GOPATH"]).strip()
-            bin_path = os.path.join(go_path, "bin", tool)
-            if os.path.exists(bin_path):
-                run_command(["mv", bin_path, "$PREFIX/bin/"])
+        # Instead of using "go install", download the binary directly if available
+        try:
+            download_and_extract(f"https://github.com/{repo_url}/releases/latest/download/{tool}.tar.gz")
+            bin_path = Path(f"./{tool}")
+            if bin_path.exists():
+                move(str(bin_path), os.getenv("PREFIX") + "/bin/")
                 print(f"{Fore.GREEN}{tool} installed successfully{Fore.RESET}")
                 return
+        except Exception as e:
+            print(f"{Fore.RED}Failed to install {tool}: {e}{Fore.RESET}")
         print(f"{Fore.YELLOW}Retrying in {delay} seconds...{Fore.RESET}")
         time.sleep(delay)
     print(f"{Fore.RED}Failed to install {tool} after {retries} attempts{Fore.RESET}")
@@ -70,6 +93,14 @@ def handle_input(prompt="Press Enter to continue..."):
     except EOFError:
         pass  # Handle case where input is not expected, e.g., script automation
 
+def clone_repo(repo_url, target_dir=None):
+    """Clone a git repository using GitPython"""
+    try:
+        git.Repo.clone_from(repo_url, target_dir or repo_url.split('/')[-1])
+        print(f"{Fore.GREEN}Cloned {repo_url} successfully{Fore.RESET}")
+    except git.exc.GitError as e:
+        print(f"{Fore.RED}Git cloning failed: {e}{Fore.RESET}")
+
 def main():
     system = platform.system()
     package_manager = detect_package_manager()
@@ -81,42 +112,42 @@ def main():
     print(f"{Fore.GREEN}Detected package manager: {package_manager}{Fore.RESET}")
 
     # Install colorama
-    install_tool("colorama", lambda: run_command(["pip3", "install", "colorama"]))
+    install_tool("colorama", lambda: run_command_alternative(["pip3", "install", "colorama"]))
 
     # Handle platform-specific installations
     go_install = lambda: install_package("golang", package_manager)
     node_install = lambda: install_package("nodejs", package_manager)
     npm_install = lambda: install_package("npm", package_manager)
     if package_manager == "pkg":
-        go_install = lambda: run_command(["pkg", "install", "-y", "golang"])
-        node_install = lambda: run_command(["pkg", "install", "-y", "nodejs"])
-        npm_install = lambda: run_command(["pkg", "install", "-y", "npm"])
+        go_install = lambda: run_command_alternative(["pkg", "install", "-y", "golang"])
+        node_install = lambda: run_command_alternative(["pkg", "install", "-y", "nodejs"])
+        npm_install = lambda: run_command_alternative(["pkg", "install", "-y", "npm"])
 
     install_tool("go", go_install)
     install_tool("node", node_install)
     install_tool("npm", npm_install)
 
-    install_tool("blc", lambda: run_command(["npm", "install", "-g", "broken-link-checker"]))
+    install_tool("blc", lambda: run_command_alternative(["npm", "install", "-g", "broken-link-checker"]))
 
     tools = [
-        ("nuclei", lambda: install_go_tool("nuclei", "github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest")),
-        ("dnsx", lambda: install_go_tool("dnsx", "github.com/projectdiscovery/dnsx/cmd/dnsx@latest")),
-        ("subfinder", lambda: install_go_tool("subfinder", "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest")),
-        ("waybackurls", lambda: install_go_tool("waybackurls", "github.com/tomnomnom/waybackurls@latest")),
-        ("httprobe", lambda: install_go_tool("httprobe", "github.com/tomnomnom/httprobe@latest")),
-        ("httpx", lambda: install_go_tool("httpx", "github.com/projectdiscovery/httpx/cmd/httpx@latest")),
-        ("anew", lambda: install_go_tool("anew", "github.com/tomnomnom/anew@latest")),
-        ("gau", lambda: install_go_tool("gau", "github.com/lc/gau/v2/cmd/gau@latest")),
-        ("gauplus", lambda: install_go_tool("gauplus", "github.com/bp0lr/gauplus@latest")),
-        ("hakrawler", lambda: install_go_tool("hakrawler", "github.com/hakluke/hakrawler@latest")),
-        ("assetfinder", lambda: install_go_tool("assetfinder", "github.com/tomnomnom/assetfinder@latest")),
+        ("nuclei", lambda: install_go_tool("nuclei", "projectdiscovery/nuclei/v2/cmd/nuclei@latest")),
+        ("dnsx", lambda: install_go_tool("dnsx", "projectdiscovery/dnsx/cmd/dnsx@latest")),
+        ("subfinder", lambda: install_go_tool("subfinder", "projectdiscovery/subfinder/v2/cmd/subfinder@latest")),
+        ("waybackurls", lambda: install_go_tool("waybackurls", "tomnomnom/waybackurls@latest")),
+        ("httprobe", lambda: install_go_tool("httprobe", "tomnomnom/httprobe@latest")),
+        ("httpx", lambda: install_go_tool("httpx", "projectdiscovery/httpx/cmd/httpx@latest")),
+        ("anew", lambda: install_go_tool("anew", "tomnomnom/anew@latest")),
+        ("gau", lambda: install_go_tool("gau", "lc/gau/v2/cmd/gau@latest")),
+        ("gauplus", lambda: install_go_tool("gauplus", "bp0lr/gauplus@latest")),
+        ("hakrawler", lambda: install_go_tool("hakrawler", "hakluke/hakrawler@latest")),
+        ("assetfinder", lambda: install_go_tool("assetfinder", "tomnomnom/assetfinder@latest")),
     ]
 
     install_tools_parallel(tools)
 
     install_tool("jq", lambda: install_package("jq", package_manager))
-    install_tool("shodan", lambda: run_command(["pip3", "install", "shodan"]))
-    install_tool("paramspider", lambda: run_command(["git", "clone", "https://github.com/devanshbatham/ParamSpider", "&&", "cd", "ParamSpider", "&&", "python3", "setup.py", "install"]))
+    install_tool("shodan", lambda: run_command_alternative(["pip3", "install", "shodan"]))
+    install_tool("paramspider", lambda: clone_repo("https://github.com/devanshbatham/ParamSpider"))
 
     handle_input()
 
