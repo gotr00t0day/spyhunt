@@ -7,8 +7,8 @@ init(autoreset=True)
 
 def run_command(cmd):
     try:
-        print(f"{Fore.CYAN}Running: {cmd}{Fore.RESET}")
-        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
+        print(f"{Fore.CYAN}Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}{Fore.RESET}")
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, universal_newlines=True)
         print(f"{Fore.GREEN}{output.strip()}{Fore.RESET}")
         return output
     except subprocess.CalledProcessError as e:
@@ -25,9 +25,15 @@ def detect_package_manager():
 
 def install_package(package, manager):
     commands = {
-        "apt": f"sudo apt install -y {package}", "dnf": f"sudo dnf install -y {package}", "yum": f"sudo yum install -y {package}",
-        "pacman": f"sudo pacman -S --noconfirm {package}", "zypper": f"sudo zypper install -y {package}", "apk": f"sudo apk add {package}",
-        "pkg": f"pkg install -y {package}", "brew": f"brew install {package}", "choco": f"choco install {package} -y"
+        "apt": ["sudo", "apt", "install", "-y", package],
+        "dnf": ["sudo", "dnf", "install", "-y", package],
+        "yum": ["sudo", "yum", "install", "-y", package],
+        "pacman": ["sudo", "pacman", "-S", "--noconfirm", package],
+        "zypper": ["sudo", "zypper", "install", "-y", package],
+        "apk": ["sudo", "apk", "add", package],
+        "pkg": ["pkg", "install", "-y", package],
+        "brew": ["brew", "install", package],
+        "choco": ["choco", "install", package, "-y"]
     }
     return run_command(commands.get(manager))
 
@@ -40,12 +46,12 @@ def install_tool(name, install_cmd, check_cmd=None):
         print(f"{Fore.GREEN}{name} is already installed{Fore.RESET}")
 
 def install_go_tool(tool, package, retries=3, delay=5):
-    for attempt in range(retries):
-        if run_command(f"go install {package}") is not None:
-            go_path = run_command("go env GOPATH").strip()
+    for _ in range(retries):
+        if run_command(["go", "install", package]) is not None:
+            go_path = run_command(["go", "env", "GOPATH"]).strip()
             bin_path = os.path.join(go_path, "bin", tool)
             if os.path.exists(bin_path):
-                run_command(f"mv {bin_path} $PREFIX/bin/")
+                run_command(["mv", bin_path, "$PREFIX/bin/"])
                 print(f"{Fore.GREEN}{tool} installed successfully{Fore.RESET}")
                 return
         print(f"{Fore.YELLOW}Retrying in {delay} seconds...{Fore.RESET}")
@@ -75,22 +81,22 @@ def main():
     print(f"{Fore.GREEN}Detected package manager: {package_manager}{Fore.RESET}")
 
     # Install colorama
-    install_tool("colorama", lambda: run_command("pip3 install colorama"))
+    install_tool("colorama", lambda: run_command(["pip3", "install", "colorama"]))
 
     # Handle platform-specific installations
     go_install = lambda: install_package("golang", package_manager)
     node_install = lambda: install_package("nodejs", package_manager)
     npm_install = lambda: install_package("npm", package_manager)
     if package_manager == "pkg":
-        go_install = lambda: run_command("pkg install -y golang")
-        node_install = lambda: run_command("pkg install -y nodejs")
-        npm_install = lambda: run_command("pkg install -y npm")
+        go_install = lambda: run_command(["pkg", "install", "-y", "golang"])
+        node_install = lambda: run_command(["pkg", "install", "-y", "nodejs"])
+        npm_install = lambda: run_command(["pkg", "install", "-y", "npm"])
 
     install_tool("go", go_install)
     install_tool("node", node_install)
     install_tool("npm", npm_install)
 
-    install_tool("blc", lambda: run_command("npm install -g broken-link-checker"))
+    install_tool("blc", lambda: run_command(["npm", "install", "-g", "broken-link-checker"]))
 
     tools = [
         ("nuclei", lambda: install_go_tool("nuclei", "github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest")),
@@ -109,8 +115,8 @@ def main():
     install_tools_parallel(tools)
 
     install_tool("jq", lambda: install_package("jq", package_manager))
-    install_tool("shodan", lambda: run_command("pip3 install shodan"))
-    install_tool("paramspider", lambda: run_command("git clone https://github.com/devanshbatham/ParamSpider && cd ParamSpider && python3 setup.py install"))
+    install_tool("shodan", lambda: run_command(["pip3", "install", "shodan"]))
+    install_tool("paramspider", lambda: run_command(["git", "clone", "https://github.com/devanshbatham/ParamSpider", "&&", "cd", "ParamSpider", "&&", "python3", "setup.py", "install"]))
 
     handle_input()
 
