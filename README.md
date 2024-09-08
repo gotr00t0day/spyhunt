@@ -210,3 +210,11 @@ Javascript endpoint fuzzing
 ```
 python3 spyhunt.py -javascript_endpoint domains.txt -c 20 --save filename.txt
 ```
+Modify the headers of the request
+```
+python3 spyhunt.py -ch domain.com
+```
+Parameter bruteforcing
+```
+python3 spyhunt.py -pf domain.com
+```

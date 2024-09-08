@@ -56,7 +56,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 2.1
+V 2.3
 By c0deninja
 
 """
@@ -264,6 +264,16 @@ crawlers_group.add_argument('-je', '--javascript_endpoints',
                     type=str, help='extract javascript endpoints',
                     metavar='file.txt')
 
+fuzzing_group.add_argument('-pm', '--param_miner',
+                    type=str, help='param miner',
+                    metavar='domain.com')
+
+fuzzing_group.add_argument('-ch', '--custom_headers',
+                    type=str, help='custom headers',
+                    metavar='domain.com')
+
+parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
+
 parser.add_argument("-c", "--concurrency", type=int, default=10, help="Maximum number of concurrent requests")
 
 nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
@@ -460,59 +470,48 @@ if args.corsmisconfig:
 
 
 if args.hostheaderinjection:
-    print(f"{Fore.MAGENTA}\\t\\t Host Header Injection \\n")
-    redirect = {"301", "302", "303", "307", "308"}  # Use a set for faster lookup
-    timeout = 5  # Timeout value in seconds
-    with open(f"{args.hostheaderinjection}", "r") as f:
-        domains = [x.strip() for x in f.readlines()]
-    payload = b"google.com"
-    print(f"{Fore.WHITE} Checking For {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\\n")
-
     def check_host_header_injection(domainlist):
-        vuln_domain = []
         session = requests.Session()
-        header = {"X-Forwarded-Host": "google.com"}
-        header2 = {"Host": "google.com"}
+        headers = {
+            "X-Forwarded-Host": "evil.com",
+            "Host": "evil.com"
+        }
         try:
-            start_time = time.time()
-            resp = session.get(f"{domainlist}", verify=False, headers=header, timeout=timeout)
-            resp2 = session.get(f"{domainlist}", verify=False, headers=header2, timeout=timeout)
-            elapsed_time = time.time() - start_time
-            resp_content = resp.content
-            resp_status = resp.status_code
-            resp2_content = resp2.content
+            normal_resp = session.get(domainlist, verify=False, timeout=5)
+            normal_content = normal_resp.text
 
-            for value, key in resp.headers.items():
-                if value == "Location" and key == payload and resp_status in redirect:
-                    vuln_domain.append(domainlist)
-                if payload in resp_content or key == payload:
-                    vuln_domain.append(domainlist)
+            for header_name, header_value in headers.items():
+                resp = session.get(domainlist, verify=False, headers={header_name: header_value}, timeout=5)
+                
+                if resp.status_code in {301, 302, 303, 307, 308}:
+                    location = resp.headers.get('Location', '')
+                    if 'evil.com' in location.lower():
+                        print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(Redirect to evil.com in Location header)")
+                        return
+                    
+                if resp.text != normal_content:
+                    if 'evil.com' in resp.text.lower():
+                        print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(evil.com found in response body)")
+                        return
 
-            for value2, key2 in resp2.headers.items():
-                if payload in resp2_content or key == payload:
-                    vuln_domain.append(domainlist)
-
-            if vuln_domain:
-                duplicates_none = list(set(vuln_domain))  # Remove duplicates
-                duplicates_none = ", ".join(duplicates_none)
-                print(f"{Fore.RED} POSSIBLE {Fore.YELLOW} Host Header Injection Detected {Fore.MAGENTA}- {Fore.GREEN} {duplicates_none}")
-
-            print(f"{Fore.CYAN} No Detection {Fore.MAGENTA}- {Fore.GREEN} {(domainlist)}{Fore.BLUE} ({resp_status})")
-
-            if elapsed_time > timeout:
-                print(f"{Fore.LIGHTBLACK_EX} Timeout Exceeded for {domainlist}. Skipping...")
+            print(f"{Fore.CYAN}Not Vulnerable: {Fore.GREEN}{domainlist}")
 
         except requests.exceptions.RequestException as e:
-            print(f"{Fore.LIGHTBLACK_EX} Error occurred while accessing {domainlist}: {e}")
+            print(f"{Fore.LIGHTBLACK_EX}Error occurred while accessing {domainlist}: {e}")
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(check_host_header_injection, domain) for domain in domains]
+    def main(args):
+        print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
+        print(f"{Fore.WHITE}Checking for {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
 
-    for future in futures:
-        try:
-            future.result()
-        except Exception as e:
-            print(f"An error occurred: {e}")
+        with open(args.hostheaderinjection, "r") as f:
+            domains = [x.strip() for x in f.readlines()]
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            executor.map(check_host_header_injection, domains)
+
+    if __name__ == "__main__":
+        if args.hostheaderinjection:
+            main(args)
 
 
 if args.securityheaders:
@@ -1821,3 +1820,154 @@ if args.javascript_endpoints:
 
     if __name__ == "__main__":
         asyncio.run(main()) 
+
+if args.param_miner:
+    def generate_random_string(length=10):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+    def detect_reflection(response, payload):
+        return payload in response.text or payload in response.headers.values()
+
+    def analyze_response_difference(original_response, modified_response):
+        if abs(len(original_response.content) - len(modified_response.content)) > 50:
+            return True
+        return False
+
+    def brute_force_parameter(url, param, original_response):
+        try:
+            payload = generate_random_string()
+            test_url = f"{url}{'&' if '?' in url else '?'}{param}={payload}"
+            response = requests.get(test_url, timeout=5, allow_redirects=False)
+            
+            if detect_reflection(response, payload):
+                print(f"{Fore.GREEN}[+] Reflected parameter found: {param}{Style.RESET_ALL}")
+                return param, "reflected"
+            
+            if analyze_response_difference(original_response, response):
+                print(f"{Fore.WHITE}[*] Potential parameter found (response changed): {Fore.YELLOW}{param}{Style.RESET_ALL}")
+                return param, "potential"
+            
+            if response.status_code != original_response.status_code:
+                print(f"{Fore.WHITE}[*] Status code changed for parameter: {Fore.CYAN}{param} {Fore.YELLOW}({original_response.status_code} -> {response.status_code}){Style.RESET_ALL}")
+                return param, "status_changed"
+            
+        except requests.RequestException:
+            pass
+        return None, None
+
+    def scan_common_parameters(url):
+        common_params = ['id', 'page', 'search', 'q', 'query', 'file', 'filename', 'path', 'dir']
+        found_params = []
+        for param in common_params:
+            result, _ = brute_force_parameter(url, param, requests.get(url, timeout=5))
+            if result:
+                found_params.append(result)
+        return found_params
+
+    def extract_parameters_from_html(url):
+        try:
+            response = requests.get(url, timeout=5)
+            form_params = re.findall(r'name=["\']([^"\']+)["\']', response.text)
+            js_params = re.findall(r'(?:get|post)\s*\(\s*["\'][^"\']*\?([^"\'&]+)=', response.text)
+            return list(set(form_params + js_params))
+        except requests.RequestException:
+            return []
+
+    def main(url, wordlist, threads):
+        print(f"{Fore.BLUE}[*] Starting parameter mining on: {url}{Style.RESET_ALL}")
+        
+        original_response = requests.get(url, timeout=5)
+        
+        print(f"{Fore.MAGENTA}[*] Scanning for common parameters...{Style.RESET_ALL}")
+        common_params = scan_common_parameters(url)
+        
+        print(f"{Fore.MAGENTA}[*] Extracting parameters from HTML and JavaScript...{Style.RESET_ALL}")
+        extracted_params = extract_parameters_from_html(url)
+        
+        with open(wordlist, 'r') as file:
+            wordlist_params = [line.strip() for line in file]
+        all_params = list(set(wordlist_params + extracted_params + common_params))
+        
+        print(f"{Fore.BLUE}[*] Testing {len(all_params)} unique parameters...{Style.RESET_ALL}")
+        
+        reflected_params = []
+        potential_params = []
+        status_changed_params = []
+        
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            futures = [executor.submit(brute_force_parameter, url, param, original_response) for param in all_params]
+            for future in as_completed(futures):
+                result, category = future.result()
+                if result:
+                    if category == "reflected":
+                        reflected_params.append(result)
+                    elif category == "potential":
+                        potential_params.append(result)
+                    elif category == "status_changed":
+                        status_changed_params.append(result)
+        
+        print(f"\n{Fore.GREEN}[+] Reflected parameters: {', '.join(reflected_params)}{Style.RESET_ALL}")
+        print(f"{Fore.WHITE}[*] Potential parameters: {Fore.YELLOW}{', '.join(potential_params)}{Style.RESET_ALL}")
+        print(f"{Fore.WHITE}[*] Status-changing parameters: {Fore.CYAN}{', '.join(status_changed_params)}{Style.RESET_ALL}")
+
+    if __name__ == "__main__":
+        main(args.param_miner, args.wordlist, args.concurrency)
+        
+if args.custom_headers:
+    def print_headers(headers):
+        print(f"{Fore.CYAN}Response Headers:{Style.RESET_ALL}")
+        for key, value in headers.items():
+            print(f"{Fore.GREEN}{key}: {Fore.YELLOW}{value}{Style.RESET_ALL}")
+
+    def send_request(url, custom_headers=None, verbose=False):
+        try:
+            response = requests.get(url, headers=custom_headers, timeout=10)
+            print(f"\n{Fore.MAGENTA}Status Code: {response.status_code}{Style.RESET_ALL}")
+            print_headers(response.headers)
+            
+            if verbose:
+                print(f"\n{Fore.CYAN}Response Content:{Style.RESET_ALL}")
+                print(response.text)
+        except requests.RequestException as e:
+            print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+
+    def main(initial_url, verbose):
+        url = initial_url
+        
+        while True:
+            print(f"\n{Fore.YELLOW}Current URL: {url}{Style.RESET_ALL}")
+            print(f"\n{Fore.YELLOW}Options:{Style.RESET_ALL}")
+            print("1. Send request with default headers")
+            print("2. Send request with custom headers")
+            print("3. Change URL")
+            print("4. Exit")
+            
+            choice = input(f"{Fore.CYAN}Enter your choice (1-4): {Style.RESET_ALL}")
+            
+            if choice == '1':
+                send_request(url)
+            elif choice == '2':
+                custom_headers = {}
+                print(f"{Fore.YELLOW}Enter custom headers (one per line, format 'Key: Value'). Type 'done' when finished.{Style.RESET_ALL}")
+                while True:
+                    header = input()
+                    if header.lower() == 'done':
+                        break
+                    key, value = header.split(': ', 1)
+                    custom_headers[key] = value
+                send_request(url, custom_headers)
+                if args.verbose:
+                    send_request(url, custom_headers, verbose=True)
+            elif choice == '3':
+                url = input(f"{Fore.CYAN}Enter the new URL to check: {Style.RESET_ALL}")
+            elif choice == '4':
+                print(f"{Fore.GREEN}Exiting. Goodbye!{Style.RESET_ALL}")
+                break
+            else:
+                print(f"{Fore.RED}Invalid choice. Please try again.{Style.RESET_ALL}")
+
+    if __name__ == "__main__": 
+        if args.verbose:
+            print(f"{Fore.CYAN}Verbose mode enabled{Style.RESET_ALL}")
+        if args.custom_headers:
+            main(args.custom_headers, args.verbose)
