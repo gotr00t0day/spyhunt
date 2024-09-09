@@ -1911,41 +1911,97 @@ if args.param_miner:
         print(f"{Fore.WHITE}[*] Status-changing parameters: {Fore.CYAN}{', '.join(status_changed_params)}{Style.RESET_ALL}")
 
     if __name__ == "__main__":
-        main(args.param_miner, args.wordlist, args.concurrency)
+        try:
+            main(args.param_miner, args.wordlist, args.concurrency)
+        except KeyboardInterrupt:
+            print(f"{Fore.RED}Scan interrupted by user.{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
         
 if args.custom_headers:
     def print_headers(headers):
-        print(f"{Fore.CYAN}Response Headers:{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}Headers:{Style.RESET_ALL}")
         for key, value in headers.items():
             print(f"{Fore.GREEN}{key}: {Fore.YELLOW}{value}{Style.RESET_ALL}")
 
-    def send_request(url, custom_headers=None, verbose=False):
+    def extract_links(content, base_url):
+        soup = BeautifulSoup(content, 'html.parser')
+        links = [urljoin(base_url, link.get('href')) for link in soup.find_all('a', href=True)]
+        return links
+
+    def send_request(url, method='GET', custom_headers=None, data=None, params=None, auth=None, proxies=None, allow_redirects=True, verbose=False):
         try:
-            response = requests.get(url, headers=custom_headers, timeout=10)
+            start_time = time.time()
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=custom_headers,
+                data=data,
+                params=params,
+                auth=auth,
+                proxies=proxies,
+                allow_redirects=allow_redirects,
+                timeout=10
+            )
+            end_time = time.time()
+
             print(f"\n{Fore.MAGENTA}Status Code: {response.status_code}{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}Response Time: {end_time - start_time:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}Response Size: {len(response.content)} bytes{Style.RESET_ALL}")
+            
+            print("\n--- Request Details ---")
+            print(f"{Fore.CYAN}Method: {method}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}URL: {url}{Style.RESET_ALL}")
+            print_headers(response.request.headers)
+            
+            if data:
+                print(f"\n{Fore.CYAN}Request Data:{Style.RESET_ALL}")
+                print(json.dumps(data, indent=2))
+            
+            print("\n--- Response Details ---")
             print_headers(response.headers)
             
             if verbose:
                 print(f"\n{Fore.CYAN}Response Content:{Style.RESET_ALL}")
                 print(response.text)
+            
+            links = extract_links(response.text, url)
+            print(f"\n{Fore.CYAN}Links found in the response:{Style.RESET_ALL}")
+            for link in links:
+                print(link)
+
+            return response
         except requests.RequestException as e:
             print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+            return None
+
+    def load_headers_from_file(filename):
+        with open(filename, 'r') as f:
+            return json.load(f)
 
     def main(initial_url, verbose):
         url = initial_url
+        session = requests.Session()
         
         while True:
             print(f"\n{Fore.YELLOW}Current URL: {url}{Style.RESET_ALL}")
             print(f"\n{Fore.YELLOW}Options:{Style.RESET_ALL}")
-            print("1. Send request with default headers")
-            print("2. Send request with custom headers")
-            print("3. Change URL")
-            print("4. Exit")
+            print("1. Send GET request with default headers")
+            print("2. Send GET request with custom headers")
+            print("3. Send POST request")
+            print("4. Send request with custom method and headers")
+            print("5. Change URL")
+            print("6. Load headers from file")
+            print("7. Set authentication")
+            print("8. Set proxy")
+            print("9. Toggle redirect following")
+            print("10. Save last response to file")
+            print("11. Exit")
             
-            choice = input(f"{Fore.CYAN}Enter your choice (1-4): {Style.RESET_ALL}")
+            choice = input(f"{Fore.CYAN}Enter your choice (1-11): {Style.RESET_ALL}")
             
             if choice == '1':
-                send_request(url)
+                send_request(url, verbose=verbose)
             elif choice == '2':
                 custom_headers = {}
                 print(f"{Fore.YELLOW}Enter custom headers (one per line, format 'Key: Value'). Type 'done' when finished.{Style.RESET_ALL}")
@@ -1955,19 +2011,51 @@ if args.custom_headers:
                         break
                     key, value = header.split(': ', 1)
                     custom_headers[key] = value
-                send_request(url, custom_headers)
-                if args.verbose:
-                    send_request(url, custom_headers, verbose=True)
+                send_request(url, custom_headers=custom_headers, verbose=verbose)
             elif choice == '3':
-                url = input(f"{Fore.CYAN}Enter the new URL to check: {Style.RESET_ALL}")
+                data = input(f"{Fore.CYAN}Enter POST data (JSON format): {Style.RESET_ALL}")
+                send_request(url, method='POST', data=json.loads(data), verbose=verbose)
             elif choice == '4':
+                method = input(f"{Fore.CYAN}Enter HTTP method: {Style.RESET_ALL}").upper()
+                custom_headers = {}
+                print(f"{Fore.YELLOW}Enter custom headers (one per line, format 'Key: Value'). Type 'done' when finished.{Style.RESET_ALL}")
+                while True:
+                    header = input()
+                    if header.lower() == 'done':
+                        break
+                    key, value = header.split(': ', 1)
+                    custom_headers[key] = value
+                send_request(url, method=method, custom_headers=custom_headers, verbose=verbose)
+            elif choice == '5':
+                url = input(f"{Fore.CYAN}Enter the new URL to check: {Style.RESET_ALL}")
+            elif choice == '6':
+                filename = input(f"{Fore.CYAN}Enter the filename to load headers from: {Style.RESET_ALL}")
+                custom_headers = load_headers_from_file(filename)
+                send_request(url, custom_headers=custom_headers, verbose=verbose)
+            elif choice == '7':
+                username = input(f"{Fore.CYAN}Enter username: {Style.RESET_ALL}")
+                password = input(f"{Fore.CYAN}Enter password: {Style.RESET_ALL}")
+                send_request(url, auth=(username, password), verbose=verbose)
+            elif choice == '8':
+                proxy = input(f"{Fore.CYAN}Enter proxy URL: {Style.RESET_ALL}")
+                send_request(url, proxies={'http': proxy, 'https': proxy}, verbose=verbose)
+            elif choice == '9':
+                allow_redirects = input(f"{Fore.CYAN}Allow redirects? (y/n): {Style.RESET_ALL}").lower() == 'y'
+                send_request(url, allow_redirects=allow_redirects, verbose=verbose)
+            elif choice == '10':
+                filename = input(f"{Fore.CYAN}Enter filename to save response: {Style.RESET_ALL}")
+                response = send_request(url, verbose=verbose)
+                if response:
+                    with open(filename, 'w') as f:
+                        json.dump(response.json(), f, indent=2)
+                    print(f"{Fore.GREEN}Response saved to {filename}{Style.RESET_ALL}")
+            elif choice == '11':
                 print(f"{Fore.GREEN}Exiting. Goodbye!{Style.RESET_ALL}")
                 break
             else:
                 print(f"{Fore.RED}Invalid choice. Please try again.{Style.RESET_ALL}")
 
-    if __name__ == "__main__": 
+    if args.custom_headers:
         if args.verbose:
             print(f"{Fore.CYAN}Verbose mode enabled{Style.RESET_ALL}")
-        if args.custom_headers:
-            main(args.custom_headers, args.verbose)
+        main(args.custom_headers, args.verbose)
