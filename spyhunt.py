@@ -299,6 +299,9 @@ if args.update:
     sys.exit(0)
 
 if args.s:
+    current_script_dir = os.path.dirname(os.path.abspath(__file__))
+    spotter_path = os.path.join(current_script_dir, 'scripts', 'spotter.sh')
+    certsh_path = os.path.join(current_script_dir, 'scripts', 'certsh.sh')
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
         cmd = f"subfinder -d {args.s} -silent"
@@ -312,13 +315,15 @@ if args.s:
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
             sys.exit(1)
-        cmd = f"./scripts/spotter.sh {args.s} | uniq | sort"
+
+        cmd = f"{spotter_path} {args.s} | uniq | sort"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         spotterout, err = p.communicate()
         spotterout = spotterout.decode()
         with open(f"{args.save}", "a") as spotter:
             spotter.writelines(spotterout)
-        cmd = f"./scripts/certsh.sh {args.s} | uniq | sort"
+
+        cmd = f"{certsh_path} {args.s} | uniq | sort"
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         certshout, err = p.communicate()
         certshout = certshout.decode()
@@ -327,8 +332,8 @@ if args.s:
     else:
         commands(f"subfinder -d {args.s}")
         commands(f"assetfinder -subs-only {args.s} | uniq | sort")
-        commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
-        commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
+        commands(f"{spotter_path} {args.s} | uniq | sort")
+        commands(f"{c} {args.s} | uniq | sort")
 
 if args.reverseip:
     domain = socket.gethostbyaddr(args.reverseip)
