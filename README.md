@@ -95,8 +95,6 @@ options:
                         scan for urls and js files
   -fi https://domain.com, --favicon https://domain.com
                         get favicon hashes
-  -fm https://domain.com, --faviconmulti https://domain.com
-                        get favicon hashes
   -na https://domain.com, --networkanalyzer https://domain.com
                         net analyzer
   -ri IP, --reverseip IP
