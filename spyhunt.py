@@ -42,7 +42,6 @@ import html
 import asyncio
 import aiohttp
 
-
 warnings.filterwarnings(action='ignore',module='bs4')
 
 requests.packages.urllib3.disable_warnings()
