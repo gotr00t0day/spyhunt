@@ -332,7 +332,7 @@ if args.s:
         commands(f"subfinder -d {args.s}")
         commands(f"assetfinder -subs-only {args.s} | uniq | sort")
         commands(f"{spotter_path} {args.s} | uniq | sort")
-        commands(f"{c} {args.s} | uniq | sort")
+        commands(f"{certsh_path} {args.s} | uniq | sort")
 
 if args.reverseip:
     domain = socket.gethostbyaddr(args.reverseip)
