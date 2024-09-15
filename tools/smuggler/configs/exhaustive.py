@@ -1,4 +1,3 @@
-
 def render_template(gadget):
 	RN = "\r\n"
 	p = Payload()
