@@ -79,14 +79,62 @@ def install_go_tool(tool, package):
     else:
         print(f"{Fore.RED}Failed to install {tool}{Fore.RESET}")
 
+def check_wsl():
+    if platform.system() == "Linux":
+        with open('/proc/version', 'r') as f:
+            return 'microsoft' in f.read().lower()
+    return False
+
+def update_upgrade_system(package_manager):
+    print(f"{Fore.YELLOW}Updating and upgrading the system...{Fore.RESET}")
+    if package_manager == "apt":
+        run_command("sudo apt update && sudo apt upgrade -y")
+    elif package_manager in ["dnf", "yum"]:
+        run_command(f"sudo {package_manager} update -y")
+    elif package_manager == "pacman":
+        run_command("sudo pacman -Syu --noconfirm")
+    elif package_manager == "zypper":
+        run_command("sudo zypper update -y")
+    elif package_manager == "apk":
+        run_command("sudo apk update && sudo apk upgrade")
+    print(f"{Fore.GREEN}System updated and upgraded successfully{Fore.RESET}")
+
+def ensure_pip_installed(package_manager):
+    if not which("pip3") and not which("pip"):
+        print(f"{Fore.YELLOW}pip is not installed. Installing pip...{Fore.RESET}")
+        if platform.system() == "Linux":
+            if package_manager == "apt":
+                run_command("sudo apt install -y python3-pip")
+            elif package_manager in ["dnf", "yum"]:
+                run_command(f"sudo {package_manager} install -y python3-pip")
+            elif package_manager == "pacman":
+                run_command("sudo pacman -S --noconfirm python-pip")
+            elif package_manager == "zypper":
+                run_command("sudo zypper install -y python3-pip")
+            elif package_manager == "apk":
+                run_command("sudo apk add py3-pip")
+        elif platform.system() == "Darwin":
+            run_command("brew install python")  # This will install pip as well
+        print(f"{Fore.GREEN}pip installed successfully{Fore.RESET}")
+    else:
+        print(f"{Fore.GREEN}pip is already installed{Fore.RESET}")
+
 def main():
     system = platform.system()
+    is_wsl = check_wsl()
+
+    if is_wsl:
+        print(f"{Fore.YELLOW}Detected Windows Subsystem for Linux (WSL){Fore.RESET}")
+
     if system == "Linux":
         package_manager = detect_package_manager()
         if package_manager is None:
             print(f"{Fore.RED}Unable to detect package manager. Please install packages manually.{Fore.RESET}")
             return
         print(f"{Fore.GREEN}Detected package manager: {package_manager}{Fore.RESET}")
+        
+        if is_wsl:
+            update_upgrade_system(package_manager)
     elif system == "Darwin":  # macOS
         package_manager = "brew"
         if not which("brew"):
@@ -95,6 +143,8 @@ def main():
     else:
         print(f"{Fore.RED}Unsupported operating system: {system}{Fore.RESET}")
         return
+
+    ensure_pip_installed(package_manager)
 
     home = os.path.expanduser("~")
     
