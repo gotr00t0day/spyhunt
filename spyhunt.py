@@ -311,7 +311,7 @@ if args.s:
             subfinder.writelines(out)
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists(f"{args.save}"):
+        else:
             print(Fore.RED + "ERROR!")
             sys.exit(1)
 
@@ -374,7 +374,7 @@ if args.enumeratedomain:
         domain = args.enumeratedomain
         if "https://" in domain:
             domain = domain.replace("https://", "")
-        if "http://" in domain:
+        elif "http://" in domain:
             domain = domain.replace("http://", "")
         ip = socket.gethostbyname(domain)
         for value, key in r.headers.items():
@@ -405,7 +405,7 @@ if args.faviconmulti:
                     hash = mmh3.hash(favicon)
                     if "https" in domainlist:
                         domainlist = domainlist.replace("https://", "")
-                    if "http" in domainlist:
+                    elif "http" in domainlist:
                         domainlist = domainlist.replace("http://", "")
                     ip = socket.gethostbyname(domainlist)
                     if hash == "0":
@@ -728,7 +728,7 @@ if args.probe:
         commands(f'cat {args.probe} | httprobe -c 100 | anew >> {args.save}')
         if path.exists(f"{args.save}"):
             print(Fore.GREEN + "DONE!")
-        if not path.exists(f"{args.save}"):
+        else:
             print(Fore.RED + "ERROR!")
     else:
         commands(f'sudo cat {args.probe} | httprobe | anew')    
@@ -814,8 +814,8 @@ if args.domaininfo:
             r = sessions.get(domain_list, verify=False, headers=header)
             if "https://" in domain_list:
                 domain_list = domain_list.replace("https://", "")
-            if "http://" in domain_list:
-                domain_list = domain_list.replace("https://", "")
+            elif "http://" in domain_list:
+                domain_list = domain_list.replace("http://", "")
             for v, k in r.headers.items():
                 if "Server" in v:
                     server.append(k)
@@ -833,7 +833,7 @@ if args.domaininfo:
             new_server.update(server)
             if r.status_code == 200:
                 print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.GREEN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
-            if r.status_code == 403:
+            elif r.status_code == 403:
                 print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.RED}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
             else:
                 print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.YELLOW}[{ips}]{Fore.BLUE}[{title.get_text()}]{Fore.CYAN}[{r.status_code}]{Fore.LIGHTMAGENTA_EX}[{', '.join(map(str,new_server))}]")
@@ -860,27 +860,11 @@ if args.importantsubdomains:
     with open(f"{args.importantsubdomains}", "r") as f:
         important_subs = []
         subdomains = [x.strip() for x in f.readlines()]
+        names = ['admin', 'dev', 'test', 'api', 'staging', 'prod', 'beta', 'manage', 'jira', 'github']
         for subdomain_list in subdomains:
-            if "admin" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "dev" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "test" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "api" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "staging" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "prod" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "beta" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "manage" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "jira" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
-            if "github" in subdomain_list:
-                important_subs.append(f"{subdomain_list}")
+            for name in names:
+                if name in subdomain_list:
+                    important_subs.append(subdomain_list)
         for pos, value in enumerate(important_subs):
             print(f"{Fore.CYAN}{pos}: {Fore.GREEN}{value}")
         with open("juice_subs.txt", "w") as f:
@@ -1171,7 +1155,7 @@ if args.google:
                 f.writelines("\n")
         if path.exists(dorklist):
             print ("File saved successfully")
-        if not path.exists(dorklist):
+        else:
             print ("File was not saved")
     elif save == "n":
         pass        
