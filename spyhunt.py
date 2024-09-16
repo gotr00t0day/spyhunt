@@ -478,7 +478,12 @@ if args.hostheaderinjection:
         session = requests.Session()
         headers = {
             "X-Forwarded-Host": "evil.com",
-            "Host": "evil.com"
+            "Host": "evil.com",
+            "X-Forwarded-For": "evil.com",
+            "X-Client-IP": "evil.com",
+            "X-Remote-IP": "evil.com",
+            "X-Remote-Addr": "evil.com",
+            "X-Host": "evil.com"
         }
         try:
             normal_resp = session.get(domainlist, verify=False, timeout=5)
