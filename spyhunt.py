@@ -272,7 +272,7 @@ fuzzing_group.add_argument('-ch', '--custom_headers',
                     metavar='domain.com')
 
 vuln_group.add_argument('-or', '--openredirect',
-                    type=str, help='open redirect', action='store',
+                    type=str, help='open redirect',
                     metavar='domain.com')
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
