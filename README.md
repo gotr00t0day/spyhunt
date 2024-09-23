@@ -66,17 +66,6 @@ sudo python3 install.py
 
 ```
 
-███████╗██████╗ ██╗   ██╗██╗  ██╗██╗   ██╗███╗   ██╗████████╗
-██╔════╝██╔══██╗╚██╗ ██╔╝██║  ██║██║   ██║████╗  ██║╚══██╔══╝
-███████╗██████╔╝ ╚████╔╝ ███████║██║   ██║██╔██╗ ██║   ██║
-╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║
-███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║
-╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 2.4
-By c0deninja
-
-
-
 usage: spyhunt.py [-h] [-sv filename.txt | -wl filename.txt] [-th 25] [-s domain.com] [-t domain.com] [-d domains.txt] [-p domains.txt] [-r domains.txt]
                   [-b domains.txt] [-pspider domain.com] [-w https://domain.com] [-j domain.com] [-wc https://domain.com] [-fi https://domain.com]
                   [-fm https://domain.com] [-na https://domain.com] [-ri IP] [-rim IP] [-sc domain.com] [-ph domain.txt] [-co domains.txt] [-hh domain.com]
