@@ -180,6 +180,7 @@ def main():
         ("gauplus", "github.com/bp0lr/gauplus@latest"),
         ("hakrawler", "github.com/hakluke/hakrawler@latest"),
         ("assetfinder", "github.com/tomnomnom/assetfinder@latest"),
+        ("asnmap", "github.com/projectdiscovery/asnmap/cmd/asnmap@latest"),
     ]
 
     for tool, go_package in tools:

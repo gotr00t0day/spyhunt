@@ -275,6 +275,10 @@ vuln_group.add_argument('-or', '--openredirect',
                     type=str, help='open redirect',
                     metavar='domain.com')
 
+fuzzing_group.add_argument('-asn', '--automoussystemnumber',
+                    type=str, help='asn',
+                    metavar='AS55555')
+
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
 
 parser.add_argument("-c", "--concurrency", type=int, default=10, help="Maximum number of concurrent requests")
@@ -2132,5 +2136,57 @@ if args.openredirect:
         if args.openredirect:
             process_url(args.openredirect)
 
+    if __name__ == "__main__":
+        main()
+
+
+if args.automoussystemnumber:
+    def get_ip_ranges(asn):
+        asn = args.automoussystemnumber
+        url = f"https://stat.ripe.net/data/announced-prefixes/data.json?resource={asn}"
+        
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'data' in data and 'prefixes' in data['data']:
+                return asn, [prefix['prefix'] for prefix in data['data']['prefixes']]
+            else:
+                return asn, []
+        except requests.RequestException as e:
+            print(f"Error fetching data for {asn}: {e}", file=sys.stderr)
+            return asn, []
+
+    def process_asn(asn):
+        print(f"Fetching IP ranges for AS{asn}...")
+        return get_ip_ranges(asn)
+
+    def main():
+        results = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+            future_to_asn = {executor.submit(process_asn, asn): asn for asn in args.automoussystemnumber}
+            for future in concurrent.futures.as_completed(future_to_asn):
+                asn, ip_ranges = future.result()
+                results[asn] = ip_ranges
+
+        total_ranges = sum(len(ranges) for ranges in results.values())
+        print(f"\nFound a total of {total_ranges} IP ranges across {len(args.automoussystemnumber)} ASNs:")
+
+        if args.save:
+            with open(args.save, 'w') as f:
+                for asn, ranges in results.items():
+                    if ranges:
+                        f.write(f"AS{asn}:\n")
+                        for range in ranges:
+                            f.write(f"{range}\n")
+                        f.write("\n")
+            print(f"Results saved to {args.save}")
+        else:
+            for asn, ranges in results.items():
+                if ranges:
+                    print(f"\nAS{asn}:")
+                    for range in ranges:
+                        print(range)
     if __name__ == "__main__":
         main()
