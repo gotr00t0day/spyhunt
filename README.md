@@ -62,6 +62,8 @@ sudo python3 install.py
 
 ```
 
+[![asciicast](https://asciinema.org/a/bCVk2NRnb5TJ7aVLV5ZIcnVa3.png)](https://asciinema.org/a/bCVk2NRnb5TJ7aVLV5ZIcnVa3)
+
 # USAGE 
 
 ```
