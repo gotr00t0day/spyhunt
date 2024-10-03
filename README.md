@@ -284,4 +284,7 @@ Open Redirect
 ```
 python3 spyhunt.py -or domain.com -v -c 50
 ```
-
+Haveibeenpwned
+```
+python3 spyhunt.py -hibp password
+```

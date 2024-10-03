@@ -41,6 +41,7 @@ import string
 import html
 import asyncio
 import aiohttp
+import hashlib
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -262,6 +263,10 @@ crawlers_group.add_argument('-dp', '--depth',
 crawlers_group.add_argument('-je', '--javascript_endpoints',
                     type=str, help='extract javascript endpoints',
                     metavar='file.txt')
+
+crawlers_group.add_argument('-hibp', '--haveibeenpwned',
+                    type=str, help='check if the password has been pwned',
+                    metavar='password')
 
 fuzzing_group.add_argument('-pm', '--param_miner',
                     type=str, help='param miner',
@@ -2190,3 +2195,35 @@ if args.automoussystemnumber:
                         print(range)
     if __name__ == "__main__":
         main()
+
+
+if args.haveibeenpwned:
+    print(f"{Fore.CYAN}HAVE I BEEN PWNED!{Style.RESET_ALL}\n")
+    print(f"Checking password: {Fore.GREEN}{args.haveibeenpwned}{Style.RESET_ALL}\n")
+    def check_password_pwned(password):
+        sha1_hash = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
+        prefix = sha1_hash[:5]
+        suffix = sha1_hash[5:]
+
+        url = f"https://api.pwnedpasswords.com/range/{prefix}"
+
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+
+            hashes = (line.split(':') for line in response.text.splitlines())
+            for h, count in hashes:
+                if h == suffix:
+                    print(f"The password {Fore.GREEN}'{password}'{Fore.RESET} has been seen {Fore.RED}{count} times.{Fore.RESET}")
+                    return
+
+            print(f"The password {Fore.GREEN}'{password}'{Fore.RESET} has not been found in any breaches.")
+
+        except requests.exceptions.HTTPError as err:
+            print(f"Error checking password: {err}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+    if __name__ == "__main__":
+        password_to_check = args.haveibeenpwned
+        check_password_pwned(password_to_check)
