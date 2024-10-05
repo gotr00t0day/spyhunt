@@ -11,4 +11,4 @@ googlesearch-python
 alive-progress
 python-whois
 aiohttp
-nmap3
+dnspython

@@ -18,7 +18,9 @@ import threading
 import os.path
 import concurrent.futures
 import multiprocessing
+import dns.resolver
 import os.path
+import whois
 import socket
 import subprocess
 import sys
@@ -283,6 +285,11 @@ vuln_group.add_argument('-or', '--openredirect',
 fuzzing_group.add_argument('-asn', '--automoussystemnumber',
                     type=str, help='asn',
                     metavar='AS55555')
+
+vuln_group.add_argument('-st', '--subdomaintakeover', 
+                    type=str, help='subdomain takeover',
+                    metavar='subdomains.txt')
+
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
 
@@ -2227,3 +2234,65 @@ if args.haveibeenpwned:
     if __name__ == "__main__":
         password_to_check = args.haveibeenpwned
         check_password_pwned(password_to_check)
+
+if args.subdomaintakeover:
+    COMMON_SERVICES = [
+        "GitHub, Inc.", "GitLab Inc.", "Bitbucket", "Heroku, Inc.",
+        "Firebase", "Netlify, Inc.", "Surge", "Automattic Inc.",
+        "Amazon CloudFront", "Microsoft Azure", "Google LLC"
+    ]
+
+    def check_subdomain(subdomain):
+        url = f"https://{subdomain}"
+        try:
+            response = requests.get(url)
+            if response.status == 404:
+                print(f"[Potential Takeover] {subdomain} - 404 Not Found")
+            elif response.status == 200:
+                print(f"[Active] {subdomain} - 200 OK")
+            else:
+                print(f"[Other] {subdomain} - Status Code: {response.status}")
+        except requests.RequestException:
+            print(f"{Fore.RED}[Error] {Fore.CYAN}{subdomain} - {Fore.RED}Could not connect{Style.RESET_ALL}")
+
+    def check_dns(subdomain):
+        try:
+            answers = dns.resolver.resolve(subdomain, 'CNAME')
+            for rdata in answers:
+                target = str(rdata.target).rstrip('.')
+                print(f"{Fore.MAGENTA}[CNAME] {Fore.CYAN}{subdomain}{Style.RESET_ALL} points to {Fore.GREEN}{target}{Style.RESET_ALL}")
+                check_whois(target)  # Check WHOIS for the CNAME target
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            pass  # No CNAME record found
+        except Exception as e:
+            print(f"{Fore.RED}[DNS Error] {Fore.CYAN}{subdomain} - {Fore.RED}{e}{Style.RESET_ALL}")
+
+    def check_whois(target):
+        try:
+            w = whois.whois(target)
+            org_name = w.org if w.org else "Unknown"
+            print(f"{Fore.MAGENTA}[WHOIS] {Fore.CYAN}{target}{Style.RESET_ALL} - Organization: {Fore.GREEN}{org_name}{Style.RESET_ALL}")
+
+            for service in COMMON_SERVICES:
+                if service.lower() in org_name.lower():
+                    print(f"{Fore.YELLOW}[Potential Takeover] {Fore.CYAN}{target} is associated with {Fore.GREEN}{org_name} - Common service{Style.RESET_ALL}")
+                    break
+        except Exception as e:
+            print(f"{Fore.RED}[WHOIS Error] {Fore.CYAN}{target} - {Fore.RED}{e}{Style.RESET_ALL}")
+
+    def check_subdomain_takeover(subdomain):
+        check_dns(subdomain)  
+        check_subdomain(subdomain)  
+
+    def load_subdomains(file_path):
+        with open(file_path, 'r') as f:
+            return [line.strip() for line in f if line.strip()]
+
+    def main():
+        subdomains = load_subdomains(args.subdomaintakeover)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+            executor.map(check_subdomain_takeover, subdomains)
+
+    if __name__ == "__main__":
+        main()
