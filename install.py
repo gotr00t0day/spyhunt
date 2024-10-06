@@ -2,18 +2,15 @@ import platform
 import subprocess
 import os
 from shutil import which
-from colorama import Fore, init
-
-init(autoreset=True)
 
 def run_command(cmd):
     try:
-        print(f"{Fore.CYAN}Running command: {cmd}{Fore.RESET}")
+        print(f"Running command: {cmd}")  # Removed colorama formatting
         output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
-        print(f"{Fore.GREEN}Command output: {output.strip()}{Fore.RESET}")
+        print(f"Command output: {output.strip()}")  # Removed colorama formatting
         return output
     except subprocess.CalledProcessError as e:
-        print(f"{Fore.RED}Failed to run command: {cmd}")
+        print(f"Failed to run command: {cmd}")
         print(f"Error: {e.output}")
         return None
 
@@ -57,27 +54,27 @@ def install_tool(name, install_cmd, check_cmd=None):
     if check_cmd is None:
         check_cmd = name
     if not which(check_cmd):
-        print(f"{Fore.YELLOW}Installing {name}...{Fore.RESET}")
+        print(f"Installing {name}...")  # Removed colorama formatting
         result = install_cmd()
         if result is not None:
-            print(f"{Fore.GREEN}{name} installed successfully{Fore.RESET}")
+            print(f"{name} installed successfully")  # Removed colorama formatting
         else:
-            print(f"{Fore.RED}Failed to install {name}{Fore.RESET}")
+            print(f"Failed to install {name}")  # Removed colorama formatting
     else:
-        print(f"{Fore.GREEN}Found {name}{Fore.RESET}")
+        print(f"Found {name}")  # Removed colorama formatting
 
 def install_go_tool(tool, package):
-    print(f"{Fore.YELLOW}Installing {tool}...{Fore.RESET}")
+    print(f"Installing {tool}...")  # Removed colorama formatting
     if run_command(f"go install {package}") is not None:
         go_path = run_command("go env GOPATH").strip()
         bin_path = os.path.join(go_path, "bin", tool)
         if os.path.exists(bin_path):
             run_command(f"sudo mv {bin_path} /usr/local/bin/")
-            print(f"{Fore.GREEN}{tool} installed successfully{Fore.RESET}")
+            print(f"{tool} installed successfully")  # Removed colorama formatting
         else:
-            print(f"{Fore.RED}Failed to find {tool} in GOPATH{Fore.RESET}")
+            print(f"Failed to find {tool} in GOPATH")  # Removed colorama formatting
     else:
-        print(f"{Fore.RED}Failed to install {tool}{Fore.RESET}")
+        print(f"Failed to install {tool}")  # Removed colorama formatting
 
 def check_wsl():
     if platform.system() == "Linux":
@@ -86,7 +83,7 @@ def check_wsl():
     return False
 
 def update_upgrade_system(package_manager):
-    print(f"{Fore.YELLOW}Updating and upgrading the system...{Fore.RESET}")
+    print(f"Updating and upgrading the system...")  # Removed colorama formatting
     if package_manager == "apt":
         run_command("sudo apt update && sudo apt upgrade -y")
     elif package_manager in ["dnf", "yum"]:
@@ -97,11 +94,11 @@ def update_upgrade_system(package_manager):
         run_command("sudo zypper update -y")
     elif package_manager == "apk":
         run_command("sudo apk update && sudo apk upgrade")
-    print(f"{Fore.GREEN}System updated and upgraded successfully{Fore.RESET}")
+    print(f"System updated and upgraded successfully")  # Removed colorama formatting
 
 def ensure_pip_installed(package_manager):
     if not which("pip3") and not which("pip"):
-        print(f"{Fore.YELLOW}pip is not installed. Installing pip...{Fore.RESET}")
+        print(f"pip is not installed. Installing pip...")  # Removed colorama formatting
         if platform.system() == "Linux":
             if package_manager == "apt":
                 run_command("sudo apt install -y python3-pip")
@@ -115,33 +112,33 @@ def ensure_pip_installed(package_manager):
                 run_command("sudo apk add py3-pip")
         elif platform.system() == "Darwin":
             run_command("brew install python")  # This will install pip as well
-        print(f"{Fore.GREEN}pip installed successfully{Fore.RESET}")
+        print(f"pip installed successfully")  # Removed colorama formatting
     else:
-        print(f"{Fore.GREEN}pip is already installed{Fore.RESET}")
+        print(f"pip is already installed")  # Removed colorama formatting
 
 def main():
     system = platform.system()
     is_wsl = check_wsl()
 
     if is_wsl:
-        print(f"{Fore.YELLOW}Detected Windows Subsystem for Linux (WSL){Fore.RESET}")
+        print(f"Detected Windows Subsystem for Linux (WSL)")  # Removed colorama formatting
 
     if system == "Linux":
         package_manager = detect_package_manager()
         if package_manager is None:
-            print(f"{Fore.RED}Unable to detect package manager. Please install packages manually.{Fore.RESET}")
+            print(f"Unable to detect package manager. Please install packages manually.")  # Removed colorama formatting
             return
-        print(f"{Fore.GREEN}Detected package manager: {package_manager}{Fore.RESET}")
+        print(f"Detected package manager: {package_manager}")  # Removed colorama formatting
         
         if is_wsl:
             update_upgrade_system(package_manager)
     elif system == "Darwin":  # macOS
         package_manager = "brew"
         if not which("brew"):
-            print(f"{Fore.RED}Homebrew is required for macOS. Please install it first.{Fore.RESET}")
+            print(f"Homebrew is required for macOS. Please install it first.")  # Removed colorama formatting
             return
     else:
-        print(f"{Fore.RED}Unsupported operating system: {system}{Fore.RESET}")
+        print(f"Unsupported operating system: {system}")  # Removed colorama formatting
         return
 
     ensure_pip_installed(package_manager)
@@ -149,7 +146,7 @@ def main():
     home = os.path.expanduser("~")
     
     # Install colorama
-    install_tool("colorama", lambda: install_package("colorama", "pip"))
+    # install_tool("colorama", lambda: install_package("colorama", "pip"))  # Removed colorama installation
 
     # Install golang
     install_tool("go", lambda: install_package("golang", package_manager))
@@ -197,4 +194,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
