@@ -13,7 +13,7 @@ from alive_progress import alive_bar
 from queue import Queue
 from shutil import which
 from collections import defaultdict
-from datetime import datetime
+from waybackpy import WaybackMachine
 import threading
 import os.path
 import concurrent.futures
@@ -289,6 +289,10 @@ fuzzing_group.add_argument('-asn', '--automoussystemnumber',
 vuln_group.add_argument('-st', '--subdomaintakeover', 
                     type=str, help='subdomain takeover',
                     metavar='subdomains.txt')
+
+fuzzing_group.add_argument('-ar', '--autorecon',
+                    type=str, help='auto recon',
+                    metavar='domain.com')
 
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
@@ -2296,3 +2300,94 @@ if args.subdomaintakeover:
 
     if __name__ == "__main__":
         main()
+
+if args.autorecon:
+    async def run_dirsearch(target):
+        print(f"{Fore.MAGENTA}Running directory brute-forcing on {Fore.CYAN}{target}{Style.RESET_ALL}...")
+        wordlist = input(f"{Fore.CYAN}Enter wordlist: {Style.RESET_ALL}")
+        # Run dirsearch command
+        subprocess.run(['feroxbuster', '-u', target, '--extensions', 'php,html,js,txt,xml,asp,aspx,env,ini', '-k', '-C', '403,404,429', '-t', '100', '-w', wordlist, '-o', 'feroxbuster_results.txt'])
+
+    async def fetch(session, url):
+        try:
+            async with session.get(url) as response:
+                return await response.text()
+        except Exception as e:
+            print(f"Error fetching {url}: {e}")
+            return None
+
+    async def crawl_site(target):
+        print(f"{Fore.MAGENTA}Crawling {Fore.CYAN}{target}{Style.RESET_ALL} for links...")
+        async with aiohttp.ClientSession() as session:
+            response_text = await fetch(session, target)
+            if response_text:
+                soup = BeautifulSoup(response_text, 'html.parser')
+                links = set()
+                for link in soup.find_all('a', href=True):
+                    full_url = link['href']
+                    if not full_url.startswith('http'):
+                        full_url = urlparse(target)._replace(path=full_url).geturl()
+                    links.add(full_url)
+                return links
+        return set()
+
+    async def extract_links_from_wayback(target):
+        print(f"{Fore.MAGENTA}Extracting links from Wayback Machine for {Fore.CYAN}{target}{Style.RESET_ALL}...")
+        wayback_links = set()
+        wayback = scan(f"waybackurls {target}")
+        
+        # Fetching archived URLs
+        for url in wayback:
+            wayback_links.add(url)
+        
+        return wayback_links
+
+    def extract_parameters(links):
+        print(f"{Fore.MAGENTA}Extracting parameters from links...{Style.RESET_ALL}")
+        parameters = {}
+        for link in links:
+            parsed_url = urlparse(link)
+            query_params = parse_qs(parsed_url.query)
+            if query_params:
+                parameters[link] = query_params
+        return parameters
+
+    async def main(target):
+        await run_dirsearch(target)
+        
+        # Crawl the site
+        site_links = await crawl_site(target)
+        print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
+        with open('site_links.txt', 'w') as f:
+            for link in site_links:
+                f.write(f"{link}\n")
+
+        # Extract links from Wayback Machine
+        wayback_links = await extract_links_from_wayback(target)
+        print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(wayback_links)}{Style.RESET_ALL} links from Wayback Machine.")
+        with open('wayback_links.txt', 'w') as f:
+            for link in wayback_links:
+                f.write(f"{link}\n")
+
+        # Combine links
+        all_links = site_links.union(wayback_links)
+
+        # Extract parameters
+        parameters = extract_parameters(all_links)
+        
+        # Print extracted parameters
+        links_params = set()
+        for link, params in parameters.items():
+            links_params.add(link)
+            for param in params:
+                links_params.add(param)
+        with open('links_params.txt', 'w') as f:
+            for link in links_params:
+                f.write(f"{link}\n")
+                
+            print(f"{Fore.MAGENTA}Link: {Fore.CYAN}{link} | Parameters: {params}{Style.RESET_ALL}")
+
+    if __name__ == "__main__":
+        target_url = args.autorecon
+        asyncio.run(main(target_url))
+
