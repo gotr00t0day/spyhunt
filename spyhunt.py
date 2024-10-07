@@ -13,7 +13,7 @@ from alive_progress import alive_bar
 from queue import Queue
 from shutil import which
 from collections import defaultdict
-from waybackpy import WaybackMachine
+import waybackpy
 import threading
 import os.path
 import concurrent.futures
