@@ -2384,7 +2384,7 @@ if args.autorecon:
         with open('links_params.txt', 'w') as f:
             for link in links_params:
                 f.write(f"{link}\n")
-                
+
             print(f"{Fore.MAGENTA}Link: {Fore.CYAN}{link} | Parameters: {params}{Style.RESET_ALL}")
 
     if __name__ == "__main__":
