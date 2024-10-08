@@ -2305,7 +2305,6 @@ if args.autorecon:
     async def run_dirsearch(target):
         print(f"{Fore.MAGENTA}Running directory brute-forcing on {Fore.CYAN}{target}{Style.RESET_ALL}...")
         wordlist = input(f"{Fore.CYAN}Enter wordlist: {Style.RESET_ALL}")
-        # Run dirsearch command
         subprocess.run(['feroxbuster', '-u', target, '--extensions', 'php,html,js,txt,xml,asp,aspx,env,ini', '-k', '-C', '403,404,429', '-t', '100', '-w', wordlist, '-o', 'feroxbuster_results.txt'])
 
     async def fetch(session, url):
@@ -2336,7 +2335,6 @@ if args.autorecon:
         wayback_links = set()
         wayback = scan(f"waybackurls {target}")
         
-        # Fetching archived URLs
         for url in wayback:
             wayback_links.add(url)
         
@@ -2355,27 +2353,22 @@ if args.autorecon:
     async def main(target):
         await run_dirsearch(target)
         
-        # Crawl the site
         site_links = await crawl_site(target)
         print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
         with open('site_links.txt', 'w') as f:
             for link in site_links:
                 f.write(f"{link}\n")
 
-        # Extract links from Wayback Machine
         wayback_links = await extract_links_from_wayback(target)
         print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(wayback_links)}{Style.RESET_ALL} links from Wayback Machine.")
         with open('wayback_links.txt', 'w') as f:
             for link in wayback_links:
                 f.write(f"{link}\n")
 
-        # Combine links
         all_links = site_links.union(wayback_links)
 
-        # Extract parameters
         parameters = extract_parameters(all_links)
         
-        # Print extracted parameters
         links_params = set()
         for link, params in parameters.items():
             links_params.add(link)
