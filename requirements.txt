@@ -12,3 +12,4 @@ alive-progress
 python-whois
 aiohttp
 dnspython
+waybackpy

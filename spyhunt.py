@@ -13,6 +13,7 @@ from alive_progress import alive_bar
 from queue import Queue
 from shutil import which
 from collections import defaultdict
+from scripts import dnsparser
 import waybackpy
 import threading
 import os.path
@@ -52,13 +53,16 @@ requests.packages.urllib3.disable_warnings()
 banner = """
 
 
-███████╗██████╗ ██╗   ██╗██╗  ██╗██╗   ██╗███╗   ██╗████████╗
-██╔════╝██╔══██╗╚██╗ ██╔╝██║  ██║██║   ██║████╗  ██║╚══██╔══╝
-███████╗██████╔╝ ╚████╔╝ ███████║██║   ██║██╔██╗ ██║   ██║   
-╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
-███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
-╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 2.5
+  ██████  ██▓███ ▓██   ██▓ ██░ ██  █    ██  ███▄    █ ▄▄▄█████▓
+▒██    ▒ ▓██░  ██▒▒██  ██▒▓██░ ██▒ ██  ▓██▒ ██ ▀█   █ ▓  ██▒ ▓▒
+░ ▓██▄   ▓██░ ██▓▒ ▒██ ██░▒██▀▀██░▓██  ▒██░▓██  ▀█ ██▒▒ ▓██░ ▒░
+  ▒   ██▒▒██▄█▓▒ ▒ ░ ▐██▓░░▓█ ░██ ▓▓█  ░██░▓██▒  ▐▌██▒░ ▓██▓ ░ 
+▒██████▒▒▒██▒ ░  ░ ░ ██▒▓░░▓█▒░██▓▒▒█████▓ ▒██░   ▓██░  ▒██▒ ░ 
+▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░  ██▒▒▒  ▒ ░░▒░▒░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒   ▒ ░░   
+░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
+░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
+      ░           ░ ░      ░  ░  ░   ░              ░         
+V 2.6
 By c0deninja
 
 """
@@ -2289,8 +2293,12 @@ if args.subdomaintakeover:
         check_subdomain(subdomain)  
 
     def load_subdomains(file_path):
-        with open(file_path, 'r') as f:
-            return [line.strip() for line in f if line.strip()]
+        try:
+            with open(file_path, 'r') as f:
+                return [line.strip() for line in f if line.strip()]
+        except FileNotFoundError:
+            print(f"{Fore.RED}[Error] {Fore.CYAN}{file_path} - {Fore.RED}File not found{Style.RESET_ALL}")
+            return []
 
     def main():
         subdomains = load_subdomains(args.subdomaintakeover)
@@ -2299,46 +2307,90 @@ if args.subdomaintakeover:
             executor.map(check_subdomain_takeover, subdomains)
 
     if __name__ == "__main__":
-        main()
+        main()   
+
+
 
 if args.autorecon:
-    async def run_dirsearch(target):
-        print(f"{Fore.MAGENTA}Running directory brute-forcing on {Fore.CYAN}{target}{Style.RESET_ALL}...")
-        wordlist = input(f"{Fore.CYAN}Enter wordlist: {Style.RESET_ALL}")
-        subprocess.run(['feroxbuster', '-u', target, '--extensions', 'php,html,js,txt,xml,asp,aspx,env,ini', '-k', '-C', '403,404,429', '-t', '100', '-w', wordlist, '-o', 'feroxbuster_results.txt'])
-
     async def fetch(session, url):
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme, parsed_url.netloc]):
+            print(f"Invalid URL: {url}")
+            return None
         try:
             async with session.get(url) as response:
                 return await response.text()
         except Exception as e:
             print(f"Error fetching {url}: {e}")
             return None
-
+        
+    async def waybackpy(target):
+        waybackurls = scan(f"waybackurls {target} | anew")
+        return waybackurls
+    
+    async def portscan(target):
+        if target.startswith("http://") or target.startswith("https://"):
+            target = target.replace("http://", "").replace("https://", "")
+        if target.startswith("www."):
+            target = target[4:]
+        ports = scan(f"naabu -host {target} -silent")
+        return ports
+    
+    async def dnsscan(target):
+        dnsscan = scan(f"echo {target} | dnsx -silent -recon -j dnsscan.json")
+        return dnsscan
+    
+    async def techdetect(target):
+        tech = {}
+        try:
+            info = builtwith(f"{target}")
+            for framework, tech in info.items():
+                tech.append(f"{framework}: {tech}")
+        except UnicodeDecodeError:
+            pass
+        return tech
+    
     async def crawl_site(target):
         print(f"{Fore.MAGENTA}Crawling {Fore.CYAN}{target}{Style.RESET_ALL} for links...")
-        async with aiohttp.ClientSession() as session:
+        
+        connector = aiohttp.TCPConnector(ssl=False)
+        
+        async with aiohttp.ClientSession(connector=connector) as session:
             response_text = await fetch(session, target)
             if response_text:
                 soup = BeautifulSoup(response_text, 'html.parser')
-                links = set()
+                links = set() 
                 for link in soup.find_all('a', href=True):
                     full_url = link['href']
                     if not full_url.startswith('http'):
                         full_url = urlparse(target)._replace(path=full_url).geturl()
-                    links.add(full_url)
-                return links
-        return set()
+                    parsed_url = urlparse(full_url)
+                    if all([parsed_url.scheme, parsed_url.netloc]):
+                        links.add(full_url)
+                    else:
+                        print(f"Invalid link found: {full_url}")
+                return links 
+        return set() 
 
-    async def extract_links_from_wayback(target):
-        print(f"{Fore.MAGENTA}Extracting links from Wayback Machine for {Fore.CYAN}{target}{Style.RESET_ALL}...")
-        wayback_links = set()
-        wayback = scan(f"waybackurls {target}")
-        
-        for url in wayback:
-            wayback_links.add(url)
-        
-        return wayback_links
+    async def extract_js_files(links, target):
+        print(f"{Fore.MAGENTA}Extracting JavaScript files from links...{Style.RESET_ALL}")
+        js_files = set()
+        total_links = len(links)  
+        target_parsed = urlparse(target)  
+        async with aiohttp.ClientSession() as session:
+            for link in links:
+                try:
+                    response = await fetch(session, link)  
+                    if response:
+                        soup = BeautifulSoup(response, 'html.parser')
+                        for script in soup.find_all('script', src=True):
+                            js_url = urljoin(link, script['src'])
+                            js_parsed = urlparse(js_url)
+                            if js_parsed.netloc == target_parsed.netloc:
+                                js_files.add(js_url)
+                except Exception as e:
+                    print(f"Error extracting JS from {link}: {e}")
+        return js_files
 
     def extract_parameters(links):
         print(f"{Fore.MAGENTA}Extracting parameters from links...{Style.RESET_ALL}")
@@ -2350,37 +2402,114 @@ if args.autorecon:
                 parameters[link] = query_params
         return parameters
 
+    def shodan_search(target, api):
+        shodan_api = shodan.Shodan(api)
+        print(f"{Fore.MAGENTA}Searching Shodan for {Fore.CYAN}{target}{Style.RESET_ALL}...")
+        results = []
+        try:
+            # Perform the Shodan search
+            results = shodan_api.search(target)
+            print(f"Found {results['total']} results for {target}.")
+            
+            # Extract subdomains, port numbers, and services
+            extracted_data = []
+            for match in results['matches']:
+                ip = match['ip_str']
+                port = match['port']
+                services = match.get('product', 'Unknown')  # Get the service/product name
+                extracted_data.append(f"IP: {ip}, Port: {port}, Service: {services}")
+            
+            return extracted_data
+        except Exception as e:
+            print(f"Error searching Shodan: {e}")
+            return []
+
     async def main(target):
-        await run_dirsearch(target)
-        
-        site_links = await crawl_site(target)
-        print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
-        with open('site_links.txt', 'w') as f:
-            for link in site_links:
-                f.write(f"{link}\n")
+        print(f"{Fore.MAGENTA}Running autorecon for {Fore.CYAN}{target}{Style.RESET_ALL}\n")
+        shodankey = input(f"{Fore.CYAN}Enter your Shodan API key: {Style.RESET_ALL}")
+        print("\n")
+        with alive_bar(8, title='Running autorecon') as bar:  # Adjusted to 4 since we added Shodan search
+            site_links = await crawl_site(target)
+            print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
+            with open('site_links.txt', 'w') as f:
+                for link in site_links:
+                    f.write(f"{link}\n")
+            bar()  # Update after crawling site
 
-        wayback_links = await extract_links_from_wayback(target)
-        print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(wayback_links)}{Style.RESET_ALL} links from Wayback Machine.")
-        with open('wayback_links.txt', 'w') as f:
-            for link in wayback_links:
-                f.write(f"{link}\n")
+            all_links = site_links  # Only site links now
 
-        all_links = site_links.union(wayback_links)
+            # Extract JavaScript files, passing the 
+            js_files = await extract_js_files(all_links, target)
+            print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(js_files)}{Style.RESET_ALL} JavaScript files.")
+            with open('js_files.txt', 'w') as f:
+                for js_file in js_files:
+                    f.write(f"{js_file}\n")
+            bar()  # Update after extracting JS files
 
-        parameters = extract_parameters(all_links)
-        
-        links_params = set()
-        for link, params in parameters.items():
-            links_params.add(link)
-            for param in params:
-                links_params.add(param)
-        with open('links_params.txt', 'w') as f:
+            #Wayback urls 
+            waybackurls = await waybackpy(target)
+            with open('waybackurls.txt', 'w') as f:
+                f.write(f"{waybackurls}\n")
+            
+            with open('waybackurls.txt', 'r') as f:
+                waybackurls_lines = [line.strip() for line in f if line.strip()]
+                print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(waybackurls_lines)}{Style.RESET_ALL} waybackurls.")
+            bar()  # Update after waybackurls
+
+            #Naabu portscan
+            ports = await portscan(target)
+            with open('ports.txt', 'w') as f:
+                f.write(f"{ports}\n")
+
+            with open('ports.txt', 'r') as f:
+                ports_lines = [line.strip() for line in f if line.strip()]
+                numbers = []
+                for port in ports_lines:
+                    found_numbers = re.findall(r'[-+]?\d*\.\d+|\d+', port)
+                    numbers.extend(found_numbers)
+                
+                print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(ports_lines)}{Style.RESET_ALL} Open Ports.")
+                print(f"{Fore.MAGENTA}Open Ports: {Fore.CYAN}{', '.join(map(str, numbers))}{Style.RESET_ALL}")
+            bar()  # Update after ports scan
+
+            #Dnsscan
+            dns = await dnsscan(target)
+            with open('dnsscan.json', 'w') as f:
+                f.write(f"{dns}\n")
+            print(f"{Fore.MAGENTA}DNS Scan: {Fore.CYAN}DONE!{Style.RESET_ALL}")
+            dns_output = scan(f"python3 dnsparser.py -dns dnsscan.json")
+            with open('dns_output.txt', 'w') as f:
+                f.write(f"{dns_output}\n")
+            bar()  # Update after dnsscan
+
+            #Techdetect
+            tech = await techdetect(target)
+            print(f"{Fore.MAGENTA}Tech Detect: {Fore.CYAN}{tech}{Style.RESET_ALL}")
+            with open('techdetect.txt', 'w') as f:
+                for techs in tech:
+                    f.write(f"{techs}\n")
+            bar()  # Update after techdetect
+
+            parameters = extract_parameters(all_links)
+            links_params = set()
+            for links in parameters:
+                links_params.add(links)
+            with open('links_params.txt', 'w') as f:
+                for link in links_params:
+                    f.write(f"{link}\n")
+            bar()  # Update after extracting parameters
+
+            # Print parameters for each link
             for link in links_params:
-                f.write(f"{link}\n")
+                print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(links_params)}{Style.RESET_ALL} Links with Parameters")
 
-            print(f"{Fore.MAGENTA}Link: {Fore.CYAN}{link} | Parameters: {params}{Style.RESET_ALL}")
-
+            # Perform Shodan search and save results to a file
+            shodan_results = shodan_search(target, shodankey)
+            with open('shodan_results.txt', 'w') as f:
+                for result in shodan_results:
+                    f.write(f"{result}\n")
+            bar()  # Update after Shodan search
+            
     if __name__ == "__main__":
         target_url = args.autorecon
         asyncio.run(main(target_url))
-

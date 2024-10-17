@@ -178,6 +178,7 @@ def main():
         ("hakrawler", "github.com/hakluke/hakrawler@latest"),
         ("assetfinder", "github.com/tomnomnom/assetfinder@latest"),
         ("asnmap", "github.com/projectdiscovery/asnmap/cmd/asnmap@latest"),
+        ("naabu", "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"),
     ]
 
     for tool, go_package in tools:

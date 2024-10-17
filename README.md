@@ -35,9 +35,16 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
    - Directory Traversal
    - SQL Injection
    - XSS
+   - Subdomain Takeover
    - Web Server Detection
    - JavaScript file scanning for sensitive info
+   - Auto Recon
+   - Port Scanning
+   - CIDR Notation Scanning
+   - Custom Headers
+   - API Fuzzing
 
+   
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
 
 5. It includes options to save results to files and customize scan parameters.
@@ -287,4 +294,12 @@ python3 spyhunt.py -or domain.com -v -c 50
 Haveibeenpwned
 ```
 python3 spyhunt.py -hibp password
+```
+Subdomain Takeover
+```
+python3 spyhunt.py -st domains.txt -c 50 
+```
+Auto Recon
+```
+python3 spyhunt.py -ar domain.com
 ```
