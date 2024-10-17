@@ -13,7 +13,6 @@ from alive_progress import alive_bar
 from queue import Queue
 from shutil import which
 from collections import defaultdict
-from scripts import dnsparser
 import waybackpy
 import threading
 import os.path
