@@ -67,30 +67,6 @@ def main():
     print(f"Status Code: {status_code}")
     print(f"Timestamp: {timestamp}\n")
     
-    # A Records
-    a_records = extract_a_records(json_data)
-    print(f"A Records ({len(a_records)}):")
-    for ip in a_records:
-        print(f"  - {ip}")
-    print()
-    save_to_file(a_records, 'a_records.txt', header="A Records")
-    
-    # MX Records
-    mx_records = extract_mx_records(json_data)
-    print(f"MX Records ({len(mx_records)}):")
-    for mx in mx_records:
-        print(f"  - {mx}")
-    print()
-    save_to_file(mx_records, 'mx_records.txt', header="MX Records")
-    
-    # TXT Records
-    txt_records = extract_txt_records(json_data)
-    print(f"TXT Records ({len(txt_records)}):")
-    for txt in txt_records:
-        print(f"  - {txt}")
-    print()
-    save_to_file(txt_records, 'txt_records.txt', header="TXT Records")
-    
     # Resolver Information
     resolvers = extract_resolvers(json_data)
     print(f"Resolvers ({len(resolvers)}):")
@@ -99,24 +75,6 @@ def main():
     print()
     save_to_file(resolvers, 'resolvers.txt', header="Resolvers")
     
-    # SOA Records
-    soa_records = extract_soa_records(json_data)
-    print_soa_records(soa_records)
-    # Saving SOA records as JSON for better structure
-    try:
-        with open('soa_records.json', 'w') as file:
-            json.dump(soa_records, file, indent=4)
-        print("SOA records saved to soa_records.json\n")
-    except IOError as e:
-        print(f"Error writing to file soa_records.json: {e}\n")
-    
-    # NS Records
-    ns_records = json_data.get('ns', [])
-    print(f"NS Records ({len(ns_records)}):")
-    for ns in ns_records:
-        print(f"  - {ns}")
-    print()
-    save_to_file(ns_records, 'ns_records.txt', header="NS Records")
     
     # All Records
     all_records = json_data.get('all', [])

@@ -13,6 +13,8 @@ from alive_progress import alive_bar
 from queue import Queue
 from shutil import which
 from collections import defaultdict
+from threading import Semaphore
+from ratelimit import limits, sleep_and_retry
 import waybackpy
 import threading
 import os.path
@@ -44,6 +46,7 @@ import html
 import asyncio
 import aiohttp
 import hashlib
+import urllib
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -61,7 +64,7 @@ banner = """
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-V 2.6
+V 2.7
 By c0deninja
 
 """
@@ -502,31 +505,29 @@ if args.faviconmulti:
 if args.corsmisconfig:
     print(f"\\t\\t\\t{Fore.CYAN}CORS {Fore.MAGENTA}Misconfiguration {Fore.GREEN}Module\\n\\n")
 
-    with open(args.corsmisconfig, "r") as f:
-        domains = [x.strip() for x in f.readlines()]
+    try:    
+        with open(args.corsmisconfig, "r") as f:
+            domains = [x.strip() for x in f.readlines()]
+    except FileNotFoundError:
+        print(f"{Fore.RED}File {args.corsmisconfig} not found!")
+        sys.exit(1)
 
     def check_cors(domainlist):
         try:
-            payload = []
-            payload.append(domainlist)
-            payload.append("evil.com")
-            header = {'Origin': ', '.join(payload)}  # Constructing the header correctly here
-
+            payload = [domainlist, "evil.com"]
+            header = {'Origin': ', '.join(payload)}
             session = requests.Session()
             session.max_redirects = 10
             resp = session.get(domainlist, verify=False, headers=header, timeout=(5, 10))
 
-            for value, key in resp.headers.items():
-                if value == "Access-Control-Allow-Origin" and key == header['Origin']:
-                    print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
-                    return
+            allow_origin = resp.headers.get("Access-Control-Allow-Origin", "")
+            allowed_methods = resp.headers.get("Access-Control-Allow-Credentials", "")
+            if allow_origin == "evil.com" and allowed_methods == "true":
+                print(f"{Fore.YELLOW}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
+                return
             print(f"{Fore.CYAN}NOT VULNERABLE: {Fore.GREEN}{domainlist} {Fore.CYAN}PAYLOADS: {Fore.MAGENTA}{', '.join(payload)}")
-
         except requests.exceptions.RequestException as e:
-            if isinstance(e, requests.exceptions.ConnectionError):
-                print(f"{Fore.RED}Connection error occurred while processing {domainlist}")
-            else:
-                print(f"{Fore.LIGHTBLACK_EX}Error occurred while processing {domainlist}: {str(e)}")
+            print(f"{Fore.LIGHTBLACK_EX}Error processing {domainlist}: {e}{Fore.RESET}")
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(check_cors, domain) for domain in domains]
@@ -558,8 +559,8 @@ if args.hostheaderinjection:
                 resp = session.get(domainlist, verify=False, headers={header_name: header_value}, timeout=5)
                 
                 if resp.status_code in {301, 302, 303, 307, 308}:
-                    location = resp.headers.get('Location', '')
-                    if 'evil.com' in location.lower():
+                    location = resp.headers.get('Location', '').lower()
+                    if location == "evil.com":
                         print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(Redirect to evil.com in Location header)")
                         return
                     
@@ -570,8 +571,8 @@ if args.hostheaderinjection:
 
             print(f"{Fore.CYAN}Not Vulnerable: {Fore.GREEN}{domainlist}")
 
-        except requests.exceptions.RequestException as e:
-            print(f"{Fore.LIGHTBLACK_EX}Error occurred while accessing {domainlist}: {e}")
+        except requests.exceptions.RequestException as e: 
+            pass
 
     def main(args):
         print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
@@ -1145,7 +1146,12 @@ if args.directorybrute:
                     try:
                         r = s.get(url, verify=False, headers=headers, timeout=10)
                         if r.status_code not in excluded_codes:
-                            color = Fore.GREEN if r.status_code == 200 else Fore.YELLOW
+                            if r.status_code == 200 and "Welcome" in r.text:
+                                color = Fore.GREEN
+                            elif r.status_code == 301 or r.status_code == 302:
+                                color = Fore.YELLOW
+                            else:
+                                color = Fore.BLUE
                             with print_lock:
                                 print(f"\n{url} - {color}{type_str} Found (Status: {r.status_code}){Fore.RESET}\n")
                     except requests.RequestException:
@@ -1309,7 +1315,16 @@ if args.print_all_ips:
         print(f"IPs saved to {filename}")
 
 
-if args.xss_scan: 
+if args.xss_scan:
+    # Define rate limit: 5 calls per second
+    CALLS = 5
+    RATE_LIMIT = 1
+
+    @sleep_and_retry
+    @limits(calls=CALLS, period=RATE_LIMIT)
+    def rate_limited_request(url, headers, timeout):
+        return requests.get(url, verify=False, headers=headers, timeout=timeout)
+
     def generate_random_string(length=8):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
@@ -1332,12 +1347,9 @@ if args.xss_scan:
             print(f"Payload: {Fore.MAGENTA}{vuln['payload']}{Fore.RESET}")
             print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
 
-    def xss_scan_url(url):
-        print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {url}{Fore.RESET}")
+    def xss_scan_url(url, payloads, bar):
+        print(f"{Fore.CYAN}Scanning for XSS vulnerabilities: {Fore.GREEN}{url}{Fore.RESET}")
         
-        with open("payloads/xss.txt", "r") as f:
-            payloads = [x.strip() for x in f.readlines()]
-            
         parsed_url = urlparse(url)
         params = parse_qs(parsed_url.query)
         
@@ -1354,7 +1366,7 @@ if args.xss_scan:
                 test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
                 
                 try:
-                    response = requests.get(test_url, verify=False, headers=header, timeout=10)
+                    response = rate_limited_request(test_url, headers=header, timeout=10)
                     response_text = response.text.lower()
                     
                     if random_string.lower() in response_text:
@@ -1364,13 +1376,17 @@ if args.xss_scan:
                             "payload": encoded_payload,
                             "test_url": test_url
                         }
-                        if re.search(r'<script>.*?alert\([\'"]{}[\'"]\).*?</script>'.format(random_string), response_text, re.IGNORECASE | re.DOTALL) or \
-                        re.search(r'on\w+\s*=.*?alert\([\'"]{}[\'"]\)'.format(random_string), response_text, re.IGNORECASE):
+                        pattern_script = r'<script>.*?alert\([\'"]{}[\'"]\).*?</script>'.format(re.escape(random_string))
+                        pattern_event = r'on\w+\s*=.*?alert\([\'"]{}[\'"]\)'.format(re.escape(random_string))
+                        if re.search(pattern_script, response_text, re.IGNORECASE | re.DOTALL) or \
+                           re.search(pattern_event, response_text, re.IGNORECASE):
                             vulnerability["execution_likelihood"] = "High"
                             vulnerabilities.append(vulnerability)
                             print_vulnerability(vulnerability)
                 except requests.RequestException as e:
                     print(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+                finally:
+                    bar()  # Increment the progress bar for each payload scanned
         
         return vulnerabilities
 
@@ -1379,21 +1395,43 @@ if args.xss_scan:
             with open(target, 'r') as file:
                 urls = [line.strip() for line in file if line.strip()]
             
+            with open("payloads/xss.txt", "r") as f:
+                payloads = [x.strip() for x in f.readlines()]
+            
+            total_payloads = 0
+            # Calculate total payloads based on number of URLs and number of payloads per URL
+            for url in urls:
+                parsed_url = urlparse(url)
+                params = parse_qs(parsed_url.query)
+                total_payloads += len(params) * len(payloads)
+            
             all_vulnerabilities = []
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                future_to_url = {executor.submit(xss_scan_url, url): url for url in urls}
-                for future in as_completed(future_to_url):
-                    url = future_to_url[future]
-                    try:
-                        vulnerabilities = future.result()
-                        all_vulnerabilities.extend(vulnerabilities)
-                    except Exception as exc:
-                        print(f'{Fore.RED}Error scanning {url}: {exc}{Fore.RESET}')
+            with alive_bar(total_payloads, title="Scanning XSS Vulnerabilities") as bar:
+                with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+                    future_to_url = {executor.submit(xss_scan_url, url, payloads, bar): url for url in urls}
+                    for future in as_completed(future_to_url):
+                        url = future_to_url[future]
+                        try:
+                            vulnerabilities = future.result()
+                            all_vulnerabilities.extend(vulnerabilities)
+                        except Exception as exc:
+                            print(f'{Fore.RED}Error scanning {url}: {exc}{Fore.RESET}')
             
             return all_vulnerabilities
         else:
-            return xss_scan_url(target)
-
+            target_url = target
+            with open("payloads/xss.txt", "r") as f:
+                payloads = [x.strip() for x in f.readlines()]
+            
+            params = parse_qs(urlparse(target_url).query)
+            total_payloads = len(params) * len(payloads)
+            
+            all_vulnerabilities = []
+            with alive_bar(total_payloads, title="Scanning XSS Vulnerabilities") as bar:
+                vulnerabilities = xss_scan_url(target_url, payloads, bar)
+                all_vulnerabilities.extend(vulnerabilities)
+            
+            return all_vulnerabilities
 
     if __name__ == "__main__":
         vulnerabilities = xss_scanner(args.xss_scan)
@@ -1405,6 +1443,10 @@ if args.xss_scan:
 
 if args.sqli_scan:
     init(autoreset=True)
+
+    # Rate Limiting Configuration
+    RATE_LIMIT = 5  # Maximum number of requests per second
+    REQUEST_INTERVAL = 1 / RATE_LIMIT  # Interval between requests in seconds
 
     def generate_random_string(length=8):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -1425,7 +1467,7 @@ if args.sqli_scan:
         print(f"Test URL: {Fore.BLUE}{vuln['test_url']}{Fore.RESET}")
         print(f"Type: {Fore.GREEN}{vuln['type']}{Fore.RESET}")
 
-    def sqli_scan_url(url, print_queue):
+    def sqli_scan_url(url, print_queue, bar, rate_limiter):
         print_queue.put(f"{Fore.CYAN}Scanning for SQL injection vulnerabilities: {url}{Fore.RESET}")
         
         parsed_url = urlparse(url)
@@ -1444,13 +1486,18 @@ if args.sqli_scan:
             ]
             
             for payload in error_payloads:
+                rate_limiter.acquire()
                 encoded_payload = encode_payload(payload)
                 test_params = params.copy()
                 test_params[param] = [encoded_payload]
                 test_url = parsed_url._replace(query=urlencode(test_params, doseq=True)).geturl()
                 
                 try:
-                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                                      'Chrome/58.0.3029.110 Safari/537.3'
+                    }
                     response = requests.get(test_url, verify=False, headers=headers, timeout=10)
                     
                     sql_errors = [
@@ -1473,12 +1520,16 @@ if args.sqli_scan:
                                 "type": "Error-based SQLi"
                             }
                             print_queue.put(vulnerability)
+                            bar()  # Increment progress bar upon finding a vulnerability
                             return  # Exit after finding a vulnerability
                     
                 except requests.RequestException as e:
                     print_queue.put(f"{Fore.YELLOW}Error scanning {test_url}: {str(e)}{Fore.RESET}")
+                finally:
+                    bar()  # Increment the progress bar for each payload scanned
             
             # Boolean-based blind SQLi
+            rate_limiter.acquire()
             original_params = params.copy()
             original_params[param] = ["1 AND 1=1"]
             true_url = parsed_url._replace(query=urlencode(original_params, doseq=True)).geturl()
@@ -1487,6 +1538,11 @@ if args.sqli_scan:
             false_url = parsed_url._replace(query=urlencode(original_params, doseq=True)).geturl()
             
             try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                                  'AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/58.0.3029.110 Safari/537.3'
+                }
                 true_response = requests.get(true_url, verify=False, headers=headers, timeout=10)
                 false_response = requests.get(false_url, verify=False, headers=headers, timeout=10)
                 
@@ -1499,12 +1555,14 @@ if args.sqli_scan:
                         "type": "Boolean-based blind SQLi"
                     }
                     print_queue.put(vulnerability)
-                    return  # Exit after finding a vulnerability
-            
+                    bar()  # Increment progress bar upon finding a vulnerability
             except requests.RequestException as e:
                 print_queue.put(f"{Fore.YELLOW}Error during boolean-based test for {url}: {str(e)}{Fore.RESET}")
-            
+            finally:
+                bar()  # Increment the progress bar even if vulnerability is found
+                
             # Time-based blind SQLi
+            rate_limiter.acquire()
             time_payload = "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a) AND '1'='1"
             encoded_time_payload = encode_payload(time_payload)
             time_params = params.copy()
@@ -1512,6 +1570,11 @@ if args.sqli_scan:
             time_url = parsed_url._replace(query=urlencode(time_params, doseq=True)).geturl()
             
             try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                                  'AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/58.0.3029.110 Safari/537.3'
+                }
                 start_time = time.time()
                 response = requests.get(time_url, verify=False, headers=headers, timeout=10)
                 end_time = time.time()
@@ -1525,10 +1588,10 @@ if args.sqli_scan:
                         "type": "Time-based blind SQLi"
                     }
                     print_queue.put(vulnerability)
-                    return  # Exit after finding a vulnerability
-            
             except requests.RequestException as e:
                 print_queue.put(f"{Fore.YELLOW}Error during time-based test for {url}: {str(e)}{Fore.RESET}")
+            finally:
+                bar()  # Increment the progress bar for each payload scanned
 
     def print_worker(print_queue):
         while True:
@@ -1549,21 +1612,79 @@ if args.sqli_scan:
         if os.path.isfile(target):
             with open(target, 'r') as file:
                 urls = [line.strip() for line in file if line.strip()]
-            
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(sqli_scan_url, url, print_queue) for url in urls]
-                for future in as_completed(futures):
-                    future.result()
         else:
-            sqli_scan_url(target, print_queue)
+            urls = [target]
+
+        try:
+            with open("payloads/sqli.txt", "r") as f:
+                payloads = [x.strip() for x in f.readlines()]
+        except FileNotFoundError:
+            print(f"{Fore.RED}Payload file 'payloads/sqli.txt' not found.{Fore.RESET}")
+            return []
+
+        total_payloads = 0
+        # Calculate total payloads based on number of URLs and number of payloads per URL
+        for url in urls:
+            parsed_url = urlparse(url)
+            params = parse_qs(parsed_url.query)
+            if params:
+                # Error-based payloads
+                error_payloads = [
+                    "' OR '1'='1",
+                    "' OR '1'='1' --",
+                    "' UNION SELECT NULL, NULL, NULL --",
+                    "1' ORDER BY 1--+",
+                    "1' ORDER BY 2--+",
+                    "1' ORDER BY 3--+",
+                    "1 UNION SELECT NULL, NULL, NULL --",
+                ]
+                total_payloads += len(params) * len(error_payloads)
+                
+                # Boolean-based payloads (1 per parameter)
+                total_payloads += len(params) * 1
+                
+                # Time-based payloads (1 per parameter)
+                total_payloads += len(params) * 1
+
+        if total_payloads == 0:
+            print(f"{Fore.YELLOW}No parameters found in the target URL(s) to perform SQLi scanning.{Fore.RESET}")
+            return []
+
+        all_vulnerabilities = []
+        # Initialize the rate limiter
+        rate_limiter = threading.Semaphore(RATE_LIMIT)
+
+        def release_rate_limiter():
+            while True:
+                time.sleep(REQUEST_INTERVAL)
+                rate_limiter.release()
+
+        # Start a thread to release the semaphore at the defined rate
+        rate_thread = threading.Thread(target=release_rate_limiter, daemon=True)
+        rate_thread.start()
+
+        with alive_bar(total_payloads, title="Scanning SQL Injection Vulnerabilities") as bar:
+            with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+                future_to_url = {executor.submit(sqli_scan_url, url, print_queue, bar, rate_limiter): url for url in urls}
+                for future in as_completed(future_to_url):
+                    url = future_to_url[future]
+                    try:
+                        vulnerabilities = future.result()
+                        all_vulnerabilities.extend(vulnerabilities)
+                    except Exception as exc:
+                        print_queue.put(f'{Fore.RED}Error scanning {url}: {exc}{Fore.RESET}')
 
         print_queue.put(None)
         print_thread.join()
 
-    if __name__ == "__main__":
-        sqli_scanner(args.sqli_scan)
+        return all_vulnerabilities
 
-        print(f"\n{Fore.GREEN}Scan completed.{Fore.RESET}")
+    if __name__ == "__main__":
+        vulnerabilities = sqli_scanner(args.sqli_scan)
+        if not vulnerabilities:
+            print(f"\n{Fore.GREEN}No SQL Injection vulnerabilities found.{Fore.RESET}")
+        else:
+            print(f"\n{Fore.RED}Total SQL Injection vulnerabilities found: {len(vulnerabilities)}{Fore.RESET}")
 
 
 if args.webserver_scan:
@@ -2092,47 +2213,64 @@ if args.openredirect:
     YELLOW = "\033[93m"
     RESET = "\033[0m"
 
+    TEST_DOMAIN = "google.com"
+
     PAYLOADS = [
-        r"//google.com",
-        r"//www.google.com",
-        r"https://google.com",
-        r"https://www.google.com",
-        r"//google.com/%2f..",
-        r"https://google.com/%2f..",
-        r"////google.com",
-        r"https:////google.com",
-        r"/\/\google.com",
-        r"/.google.com",
-        r"///\;@google.com",
-        r"///google.com@google.com",
-        r"///google.com%40google.com",
-        r"////google.com//",
-        r"/https://google.com",
+        f"//{TEST_DOMAIN}",
+        f"//www.{TEST_DOMAIN}",
+        f"https://{TEST_DOMAIN}",
+        f"https://www.{TEST_DOMAIN}",
+        f"//{TEST_DOMAIN}/%2f..",
+        f"https://{TEST_DOMAIN}/%2f..",
+        f"////{TEST_DOMAIN}",
+        f"https:////{TEST_DOMAIN}",
+        f"/\\/\\{TEST_DOMAIN}",
+        f"/.{TEST_DOMAIN}",
+        f"///\\;@{TEST_DOMAIN}",
+        f"///{TEST_DOMAIN}@{TEST_DOMAIN}",
+        f"///{TEST_DOMAIN}%40{TEST_DOMAIN}",
+        f"////{TEST_DOMAIN}//",
+        f"/https://{TEST_DOMAIN}",
     ]
 
-    def test_single_payload(url, payload):
+    def test_single_payload(url, payload, original_netloc):
         try:
-            response = requests.get(f"{url}{payload}", allow_redirects=False, verify=False, timeout=5)
+            full_url = f"{url}{payload}"
+            response = requests.get(full_url, allow_redirects=False, verify=False, timeout=5)
             if args.verbose:
-                print(f"Testing: {url}{payload}")
+                print(f"Testing: {full_url}")
                 print(f"Status Code: {response.status_code}")
                 print(f"Location: {response.headers.get('Location', 'N/A')}")
             if response.status_code in [301, 302, 303, 307, 308]:
                 location = response.headers.get('Location', '')
-                if 'google.com' in location.lower():
-                    print(f"{location}")
-                    return (f"{url}{payload}", location)
+                if location:
+                    parsed_location = urllib.parse.urlparse(location)
+                    # If 'location' is a relative URL, resolve it against the original URL
+                    if not parsed_location.netloc:
+                        location = urllib.parse.urljoin(full_url, location)
+                        parsed_location = urllib.parse.urlparse(location)
+                    # Now compare the netloc of the location with the original netloc
+                    if parsed_location.netloc and parsed_location.netloc != original_netloc:
+                        # Check if the TEST_DOMAIN is in the netloc
+                        if TEST_DOMAIN in parsed_location.netloc:
+                            print(f"{RED}VULNERABLE: Redirects to {location}{RESET}")
+                            return (full_url, location)
             elif response.status_code == 403:
-                print(f"{url}: {Fore.RED}FORBIDDEN{RESET}")
+                print(f"{url}: {RED}FORBIDDEN{RESET}")
         except requests.RequestException as e:
             if args.verbose:
-                print(f"Error testing {url}{payload}: {str(e)}")
+                print(f"Error testing {full_url}: {str(e)}")
         return None
 
     def test_open_redirect(url):
         vulnerable_urls = []
+        parsed_original_url = urllib.parse.urlparse(url)
+        original_netloc = parsed_original_url.netloc
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-            future_to_payload = {executor.submit(test_single_payload, url, payload): payload for payload in PAYLOADS}
+            future_to_payload = {
+                executor.submit(test_single_payload, url, payload, original_netloc): payload
+                for payload in PAYLOADS
+            }
             for future in concurrent.futures.as_completed(future_to_payload):
                 result = future.result()
                 if result:
