@@ -13,3 +13,4 @@ python-whois
 aiohttp
 dnspython
 waybackpy
+ratelimit
