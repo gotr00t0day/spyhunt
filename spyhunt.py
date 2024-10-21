@@ -2492,7 +2492,8 @@ if args.autorecon:
         r = s.get(target, verify=False, headers=header)
         http_headers = []
         for k,v in r.headers.items():
-            return f"{k}: {v}"
+            http_headers.append(f"{k}: {v}")    
+        return http_headers
     
     async def server_info(target):
         s = requests.Session()
