@@ -2487,6 +2487,18 @@ if args.autorecon:
             pass
         return tech
     
+    async def headers_info(target: str):
+        s = requests.Session()
+        r = s.get(target, verify=False, headers=header)
+        http_headers = []
+        for k,v in r.headers.items():
+            return f"{k}: {v}"
+    
+    async def server_info(target):
+        s = requests.Session()
+        r = s.get(target, verify=False, headers=header)
+        return r.headers.get("Server")
+    
     async def crawl_site(target):
         print(f"{Fore.MAGENTA}Crawling {Fore.CYAN}{target}{Style.RESET_ALL} for links...")
         
@@ -2565,7 +2577,7 @@ if args.autorecon:
         print(f"{Fore.MAGENTA}Running autorecon for {Fore.CYAN}{target}{Style.RESET_ALL}\n")
         shodankey = input(f"{Fore.CYAN}Enter your Shodan API key: {Style.RESET_ALL}")
         print("\n")
-        with alive_bar(8, title='Running autorecon') as bar:  # Adjusted to 4 since we added Shodan search
+        with alive_bar(10, title='Running autorecon') as bar:  # Adjusted to 4 since we added Shodan search
             site_links = await crawl_site(target)
             print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
             with open('site_links.txt', 'w') as f:
@@ -2603,11 +2615,23 @@ if args.autorecon:
                 numbers = []
                 for port in ports_lines:
                     found_numbers = re.findall(r'[-+]?\d*\.\d+|\d+', port)
-                    numbers.extend(found_numbers)
-                
+                    numbers.extend(found_numbers)     
                 print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(ports_lines)}{Style.RESET_ALL} Open Ports.")
                 print(f"{Fore.MAGENTA}Open Ports: {Fore.CYAN}{', '.join(map(str, numbers))}{Style.RESET_ALL}")
             bar()  # Update after ports scan
+
+            #Get headers
+            getheaders = await headers_info(target)
+            target2 = target.replace("https://", "").replace("http://", "").replace("www.", "")
+            with open(f"{target2}_headers.txt", "w") as f:
+                for header in getheaders:
+                    f.write(f"{header}\n")
+            bar()
+
+            #Server info
+            serverinfo = await server_info(target)
+            print(f"{Fore.MAGENTA}Server: {Fore.CYAN}{serverinfo}{Style.RESET_ALL}")
+            bar()
 
             #Dnsscan
             dns = await dnsscan(target)
