@@ -36,7 +36,6 @@ import mmh3
 import urllib3
 import warnings
 import re
-import nmap3
 import json
 import shodan
 import ipaddress
