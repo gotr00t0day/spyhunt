@@ -46,6 +46,7 @@ import asyncio
 import aiohttp
 import hashlib
 import urllib
+import nmap3
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
