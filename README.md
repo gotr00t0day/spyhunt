@@ -43,6 +43,8 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
    - CIDR Notation Scanning
    - Custom Headers
    - API Fuzzing
+   - AWS S3 Bucket Enumeration
+   - JSON Web Token Scanning
 
    
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
