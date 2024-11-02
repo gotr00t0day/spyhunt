@@ -311,3 +311,7 @@ JSON Web Token Modification
 ```
 python3 spyhunt.py -jwt-modify Token
 ```
+AWS S3 Bucket Enumeration
+```
+python3 spyhunt.py --s3-scan bucket.com
+```

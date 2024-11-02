@@ -314,24 +314,6 @@ vuln_group.add_argument('-jwt-modify', '--jwt_modify',
                      type=str, help='modify JWT token',
                      metavar='token')
 
-vuln_group.add_argument('-rce', '--rce_scan',
-                     type=str, help='scan for Remote Code Execution vulnerabilities',
-                     metavar='url')
-
-vuln_group.add_argument('-rce-params', '--rce_parameters',
-                     type=str, help='custom parameters for RCE scan (comma-separated)',
-                     metavar='param1,param2')
-
-vuln_group.add_argument('-rce-post', '--rce_post',
-                     action='store_true', help='include POST request scanning')
-
-vuln_group.add_argument('-rce-upload', '--rce_file_upload',
-                     action='store_true', help='include file upload scanning')
-
-vuln_group.add_argument('-rce-post-data', '--rce_post_data',
-                     type=str, help='POST data for RCE scan (JSON or URL-encoded)',
-                     metavar='data')
-
 parser.add_argument('--s3-scan', help='Scan for exposed S3 buckets')
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
