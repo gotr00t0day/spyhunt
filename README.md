@@ -77,46 +77,70 @@ sudo python3 install.py
 
 ```
 
-usage: spyhunt.py [-h] [-sv filename.txt | -wl filename.txt] [-th 25] [-s domain.com] [-t domain.com] [-d domains.txt] [-p domains.txt] [-r domains.txt]
-                  [-b domains.txt] [-pspider domain.com] [-w https://domain.com] [-j domain.com] [-wc https://domain.com] [-fi https://domain.com]
-                  [-fm https://domain.com] [-na https://domain.com] [-ri IP] [-rim IP] [-sc domain.com] [-ph domain.txt] [-co domains.txt] [-hh domain.com]
-                  [-sh domain.com] [-ed domain.com] [-smu domain.com] [-ips domain list] [-dinfo domain list] [-isubs domain list] [-nft domains.txt]
-                  [-n domain.com or IP] [-api domain.com] [-sho domain.com] [-fp domain.com] [-db domain.com] [-cidr IP/24] [-ps 80,443,8443] [-pai IP/24]
-                  [-xss https://example.com/page?param=value] [-sqli https://example.com/page?param=value] [-shodan KEY] [-webserver domain.com]
-                  [-javascript domain.com] [-dp 10] [-je file.txt] [-pm domain.com] [-ch domain.com] [-or domain.com] [-asn AS55555] [-v] [-c CONCURRENCY]
-                  [-nl] [-gs] [-e EXTENSIONS] [-x EXCLUDE] [-u] [--shodan-api SHODAN_API]
+  ██████  ██▓███ ▓██   ██▓ ██░ ██  █    ██  ███▄    █ ▄▄▄█████▓
+▒██    ▒ ▓██░  ██▒▒██  ██▒▓██░ ██▒ ██  ▓██▒ ██ ▀█   █ ▓  ██▒ ▓▒
+░ ▓██▄   ▓██░ ██▓▒ ▒██ ██░▒██▀▀██░▓██  ▒██░▓██  ▀█ ██▒▒ ▓██░ ▒░
+  ▒   ██▒▒██▄█▓▒ ▒ ░ ▐██▓░░▓█ ░██ ▓▓█  ░██░▓██▒  ▐▌██▒░ ▓██▓ ░
+▒██████▒▒▒██▒ ░  ░ ░ ██▒▓░░▓█▒░██▓▒▒█████▓ ▒██░   ▓██░  ▒██▒ ░
+▒ ▒▓▒ ▒ ░▒▓▒░ ░  ░  ██▒▒▒  ▒ ░░▒░▒░▒▓▒ ▒ ▒ ░ ▒░   ▒ ▒   ▒ ░░
+░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░
+░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░
+      ░           ░ ░      ░  ░  ░   ░              ░
+V 2.8
+By c0deninja
+
+
+
+usage: spyhunt.py [-h] [-sv filename.txt | -wl filename.txt] [-th 25] [-s domain.com]
+                  [-t domain.com] [-d domains.txt] [-p domains.txt] [-r domains.txt]
+                  [-b domains.txt] [-pspider domain.com] [-w https://domain.com]
+                  [-j domain.com] [-wc https://domain.com] [-fi https://domain.com]
+                  [-fm https://domain.com] [-na https://domain.com] [-ri IP] [-rim IP]
+                  [-sc domain.com] [-ph domain.txt] [-co domains.txt] [-hh domain.com]
+                  [-sh domain.com] [-ed domain.com] [-smu domain.com] [-ips domain list]
+                  [-dinfo domain list] [-isubs domain list] [-nft domains.txt]
+                  [-n domain.com or IP] [-api domain.com] [-sho domain.com] [-fp domain.com]
+                  [-db domain.com] [-cidr IP/24] [-ps 80,443,8443] [-pai IP/24]
+                  [-xss https://example.com/page?param=value]
+                  [-sqli https://example.com/page?param=value] [-shodan KEY]
+                  [-webserver domain.com] [-javascript domain.com] [-dp 10] [-je file.txt]
+                  [-hibp password] [-pm domain.com] [-ch domain.com] [-or domain.com]
+                  [-asn AS55555] [-st subdomains.txt] [-ar domain.com] [-jwt token]
+                  [-jwt-modify token] [--s3-scan S3_SCAN] [-v] [-c CONCURRENCY] [-nl] [-gs]
+                  [-e EXTENSIONS] [-x EXCLUDE] [-u] [--shodan-api SHODAN_API]
 
 options:
   -h, --help            show this help message and exit
-  -sv filename.txt, --save filename.txt
+  -sv, --save filename.txt
                         save output to file
-  -wl filename.txt, --wordlist filename.txt
+  -wl, --wordlist filename.txt
                         wordlist to use
-  -th 25, --threads 25  default 25
-  -p domains.txt, --probe domains.txt
+  -th, --threads 25     default 25
+  -p, --probe domains.txt
                         probe domains.
-  -r domains.txt, --redirects domains.txt
+  -r, --redirects domains.txt
                         links getting redirected
-  -fi https://domain.com, --favicon https://domain.com
+  -fi, --favicon https://domain.com
                         get favicon hashes
-  -fm https://domain.com, --faviconmulti https://domain.com
+  -fm, --faviconmulti https://domain.com
                         get favicon hashes
-  -ri IP, --reverseip IP
-                        reverse ip lookup
-  -rim IP, --reverseipmulti IP
+  -ri, --reverseip IP   reverse ip lookup
+  -rim, --reverseipmulti IP
                         reverse ip lookup for multiple ips
-  -sc domain.com, --statuscode domain.com
+  -sc, --statuscode domain.com
                         statuscode
-  -sh domain.com, --securityheaders domain.com
+  -sh, --securityheaders domain.com
                         scan for security headers
-  -ed domain.com, --enumeratedomain domain.com
+  -ed, --enumeratedomain domain.com
                         enumerate domains
-  -isubs domain list, --importantsubdomains domain list
-                        extract interesting subdomains from a list like dev, admin, test and etc..
-  -webserver domain.com, --webserver_scan domain.com
+  -isubs, --importantsubdomains domain list
+                        extract interesting subdomains from a list like dev, admin, test and
+                        etc..
+  -webserver, --webserver_scan domain.com
                         webserver scan
+  --s3-scan S3_SCAN     Scan for exposed S3 buckets
   -v, --verbose         Increase output verbosity
-  -c CONCURRENCY, --concurrency CONCURRENCY
+  -c, --concurrency CONCURRENCY
                         Maximum number of concurrent requests
   --shodan-api SHODAN_API
                         Shodan API key for subdomain enumeration
@@ -128,84 +152,94 @@ Nuclei Scans:
   -nl, --nuclei_lfi     Find Local File Inclusion with nuclei
 
 Vulnerability:
-  -b domains.txt, --brokenlinks domains.txt
+  -b, --brokenlinks domains.txt
                         search for broken links
-  -ph domain.txt, --pathhunt domain.txt
+  -ph, --pathhunt domain.txt
                         check for directory traversal
-  -co domains.txt, --corsmisconfig domains.txt
+  -co, --corsmisconfig domains.txt
                         cors misconfiguration
-  -hh domain.com, --hostheaderinjection domain.com
+  -hh, --hostheaderinjection domain.com
                         host header injection
-  -smu domain.com, --smuggler domain.com
+  -smu, --smuggler domain.com
                         enumerate domains
-  -fp domain.com, --forbiddenpass domain.com
+  -fp, --forbiddenpass domain.com
                         Bypass 403 forbidden
-  -xss https://example.com/page?param=value, --xss_scan https://example.com/page?param=value
+  -xss, --xss_scan https://example.com/page?param=value
                         scan for XSS vulnerabilities
-  -sqli https://example.com/page?param=value, --sqli_scan https://example.com/page?param=value
+  -sqli, --sqli_scan https://example.com/page?param=value
                         scan for SQLi vulnerabilities
-  -or domain.com, --openredirect domain.com
+  -or, --openredirect domain.com
                         open redirect
+  -st, --subdomaintakeover subdomains.txt
+                        subdomain takeover
+  -jwt, --jwt_scan token
+                        analyze JWT token for vulnerabilities
+  -jwt-modify, --jwt_modify token
+                        modify JWT token
 
 Crawlers:
-  -pspider domain.com, --paramspider domain.com
+  -pspider, --paramspider domain.com
                         extract parameters from a domain
-  -w https://domain.com, --waybackurls https://domain.com
+  -w, --waybackurls https://domain.com
                         scan for waybackurls
   -j domain.com         find javascript files
-  -wc https://domain.com, --webcrawler https://domain.com
+  -wc, --webcrawler https://domain.com
                         scan for urls and js files
-  -javascript domain.com, --javascript_scan domain.com
+  -javascript, --javascript_scan domain.com
                         scan for sensitive info in javascript files
-  -dp 10, --depth 10    depth of the crawl
-  -je file.txt, --javascript_endpoints file.txt
+  -dp, --depth 10       depth of the crawl
+  -je, --javascript_endpoints file.txt
                         extract javascript endpoints
+  -hibp, --haveibeenpwned password
+                        check if the password has been pwned
 
 Passive Recon:
   -s domain.com         scan for subdomains
-  -t domain.com, --tech domain.com
+  -t, --tech domain.com
                         find technologies
-  -d domains.txt, --dns domains.txt
+  -d, --dns domains.txt
                         scan a list of domains for dns records
-  -na https://domain.com, --networkanalyzer https://domain.com
+  -na, --networkanalyzer https://domain.com
                         net analyzer
-  -ips domain list, --ipaddresses domain list
+  -ips, --ipaddresses domain list
                         get the ips from a list of domains
-  -dinfo domain list, --domaininfo domain list
+  -dinfo, --domaininfo domain list
                         get domain information like codes,server,content length
-  -sho domain.com, --shodan domain.com
+  -sho, --shodan domain.com
                         Recon with shodan
-  -shodan KEY, --shodan_api KEY
+  -shodan, --shodan_api KEY
                         shodan api key
   -gs, --google         Google Search
 
 Fuzzing:
-  -nft domains.txt, --not_found domains.txt
+  -nft, --not_found domains.txt
                         check for 404 status code
-  -api domain.com, --api_fuzzer domain.com
+  -api, --api_fuzzer domain.com
                         Look for API endpoints
-  -db domain.com, --directorybrute domain.com
+  -db, --directorybrute domain.com
                         Brute force filenames and directories
-  -pm domain.com, --param_miner domain.com
+  -pm, --param_miner domain.com
                         param miner
-  -ch domain.com, --custom_headers domain.com
+  -ch, --custom_headers domain.com
                         custom headers
-  -asn AS55555, --automoussystemnumber AS55555
+  -asn, --automoussystemnumber AS55555
                         asn
-  -e EXTENSIONS, --extensions EXTENSIONS
+  -ar, --autorecon domain.com
+                        auto recon
+  -e, --extensions EXTENSIONS
                         Comma-separated list of file extensions to scan
-  -x EXCLUDE, --exclude EXCLUDE
+  -x, --exclude EXCLUDE
                         Comma-separated list of status codes to exclude
 
 Port Scanning:
-  -n domain.com or IP, --nmap domain.com or IP
+  -n, --nmap domain.com or IP
                         Scan a target with nmap
-  -cidr IP/24, --cidr_notation IP/24
+  -cidr, --cidr_notation IP/24
                         Scan an ip range to find assets and services
-  -ps 80,443,8443, --ports 80,443,8443
+  -ps, --ports 80,443,8443
                         Port numbers to scan
-  -pai IP/24, --print_all_ips IP/24
-                        Print all ips
+  -pai, --print_all_ips IP/24
+                        Print all ip
 ```
 
 
