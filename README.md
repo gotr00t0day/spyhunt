@@ -297,9 +297,17 @@ python3 spyhunt.py -hibp password
 ```
 Subdomain Takeover
 ```
-python3 spyhunt.py -st domains.txt -c 50 
+python3 spyhunt.py -st domains.txt --save vuln_subs.txt -c 50 
 ```
 Auto Recon
 ```
 python3 spyhunt.py -ar domain.com
+```
+JSON Web Token
+```
+python3 spyhunt.py -jwt Token
+```
+JSON Web Token Modification
+```
+python3 spyhunt.py -jwt-modify Token
 ```

@@ -14,3 +14,5 @@ aiohttp
 dnspython
 waybackpy
 ratelimit
+pyjwt
+boto3

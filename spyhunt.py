@@ -15,6 +15,9 @@ from shutil import which
 from collections import defaultdict
 from threading import Semaphore
 from ratelimit import limits, sleep_and_retry
+from modules.jwt_analyzer import JWTAnalyzer
+from modules.ss3sec import S3Scanner
+from datetime import datetime
 import waybackpy
 import threading
 import os.path
@@ -47,12 +50,15 @@ import aiohttp
 import hashlib
 import urllib
 import nmap3
+import ssl
+import shutil
+
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
 requests.packages.urllib3.disable_warnings()
 
-banner = """
+banner = f"""
 
 
   ██████  ██▓███ ▓██   ██▓ ██░ ██  █    ██  ███▄    █ ▄▄▄█████▓
@@ -64,12 +70,12 @@ banner = """
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-V 2.7
-By c0deninja
-
+{Fore.WHITE}V 2.8
+{Fore.WHITE}By c0deninja
+{Fore.RESET}
 """
 
-print(Fore.CYAN + banner)
+print(Fore.MAGENTA + banner)
 print(Fore.WHITE)
 
 def commands(cmd):
@@ -300,6 +306,33 @@ fuzzing_group.add_argument('-ar', '--autorecon',
                     type=str, help='auto recon',
                     metavar='domain.com')
 
+vuln_group.add_argument('-jwt', '--jwt_scan',
+                     type=str, help='analyze JWT token for vulnerabilities',
+                     metavar='token')
+
+vuln_group.add_argument('-jwt-modify', '--jwt_modify',
+                     type=str, help='modify JWT token',
+                     metavar='token')
+
+vuln_group.add_argument('-rce', '--rce_scan',
+                     type=str, help='scan for Remote Code Execution vulnerabilities',
+                     metavar='url')
+
+vuln_group.add_argument('-rce-params', '--rce_parameters',
+                     type=str, help='custom parameters for RCE scan (comma-separated)',
+                     metavar='param1,param2')
+
+vuln_group.add_argument('-rce-post', '--rce_post',
+                     action='store_true', help='include POST request scanning')
+
+vuln_group.add_argument('-rce-upload', '--rce_file_upload',
+                     action='store_true', help='include file upload scanning')
+
+vuln_group.add_argument('-rce-post-data', '--rce_post_data',
+                     type=str, help='POST data for RCE scan (JSON or URL-encoded)',
+                     metavar='data')
+
+parser.add_argument('--s3-scan', help='Scan for exposed S3 buckets')
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
 
@@ -323,11 +356,101 @@ args = parser.parse_args()
 user_agent = useragent_list.get_useragent()
 header = {"User-Agent": user_agent}
 
+async def update_script():
+    try:
+        # Store current version
+        current_version = "1.0.0"  # Replace with your version tracking system
+        backup_dir = "backups"
+        
+        print(f"{Fore.CYAN}Checking for updates...{Style.RESET_ALL}")
+        
+        # Create backups directory if it doesn't exist
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        
+        # Create backup of current version
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(backup_dir, f"spyhunt_backup_{timestamp}")
+        
+        print(f"{Fore.YELLOW}Creating backup...{Style.RESET_ALL}")
+        try:
+            shutil.copytree(".", backup_path, ignore=shutil.ignore_patterns(
+                '.git*', '__pycache__', 'backups', '*.pyc'
+            ))
+            print(f"{Fore.GREEN}Backup created at: {backup_path}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}Backup failed: {str(e)}{Style.RESET_ALL}")
+            return False
+
+        # Check remote repository for updates
+        print(f"{Fore.CYAN}Checking remote repository...{Style.RESET_ALL}")
+        try:
+            # Fetch without merging
+            subprocess.run(["git", "fetch"], check=True, capture_output=True)
+            
+            # Get current and remote commit hashes
+            current = subprocess.run(["git", "rev-parse", "HEAD"], 
+                                   check=True, capture_output=True, text=True).stdout.strip()
+            remote = subprocess.run(["git", "rev-parse", "@{u}"], 
+                                  check=True, capture_output=True, text=True).stdout.strip()
+            
+            if current == remote:
+                print(f"{Fore.GREEN}SpyHunt is already up to date!{Style.RESET_ALL}")
+                return True
+                
+        except subprocess.CalledProcessError as e:
+            print(f"{Fore.RED}Failed to check for updates: {str(e)}{Style.RESET_ALL}")
+            return False
+
+        # Perform update
+        print(f"{Fore.CYAN}Updating SpyHunt...{Style.RESET_ALL}")
+        try:
+            # Pull changes
+            result = subprocess.run(["git", "pull"], check=True, capture_output=True, text=True)
+            
+            if "Already up to date" in result.stdout:
+                print(f"{Fore.GREEN}SpyHunt is already up to date!{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.GREEN}Update successful!{Style.RESET_ALL}")
+                
+                # Check for dependency updates
+                requirements_path = "requirements.txt"
+                if os.path.exists(requirements_path):
+                    print(f"{Fore.CYAN}Updating dependencies...{Style.RESET_ALL}")
+                    subprocess.run(["pip", "install", "-r", requirements_path, "--upgrade"], 
+                                 check=True)
+                    print(f"{Fore.GREEN}Dependencies updated!{Style.RESET_ALL}")
+                
+                print(f"\n{Fore.GREEN}SpyHunt has been updated successfully!{Style.RESET_ALL}")
+                print(f"{Fore.YELLOW}Please restart SpyHunt to apply the updates.{Style.RESET_ALL}")
+            
+            return True
+
+        except subprocess.CalledProcessError as e:
+            print(f"{Fore.RED}Update failed: {str(e)}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}Restoring from backup...{Style.RESET_ALL}")
+            
+            # Restore from backup
+            try:
+                shutil.rmtree(".", ignore_errors=True)
+                shutil.copytree(backup_path, ".", dirs_exist_ok=True)
+                print(f"{Fore.GREEN}Restore successful!{Style.RESET_ALL}")
+            except Exception as restore_error:
+                print(f"{Fore.RED}Restore failed: {str(restore_error)}{Style.RESET_ALL}")
+                print(f"{Fore.RED}Please restore manually from: {backup_path}{Style.RESET_ALL}")
+            
+            return False
+
+    except Exception as e:
+        print(f"{Fore.RED}An unexpected error occurred: {str(e)}{Style.RESET_ALL}")
+        return False
+
+# In your argument handler:
 if args.update:
-    print(Fore.CYAN + "Updating the script...")
-    commands("git pull")
-    print(Fore.GREEN + "Script updated!")
-    sys.exit(0)
+    if asyncio.run(update_script()):
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 if args.s:
     current_script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1015,6 +1138,19 @@ if args.nmap:
                 print(f"{Fore.WHITE}Port: {Fore.CYAN}{portid}, {Fore.WHITE}Product: {Fore.CYAN}{product}")
 
 if args.api_fuzzer:
+    error_patterns = [
+        "404",
+        "Page Not Found",
+        "Not Found",
+        "Error 404",
+        "404 Not Found",
+        "The page you requested was not found",
+        "The requested URL was not found",
+        "This page does not exist",
+        "The requested page could not be found",
+        "Sorry, we couldn't find that page",
+        "Page doesn't exist"
+    ]
     s = requests.Session()
     with open("payloads/api-endpoints.txt", "r") as file:
         api_endpoints = [x.strip() for x in file.readlines()]
@@ -1023,8 +1159,28 @@ if args.api_fuzzer:
         url = f"{args.api_fuzzer}/{endpoint}"
         try:
             r = s.get(url, verify=False, headers=header, timeout=5)
-            if r.status_code == 200:
+
+            # Check response text for error patterns
+            page_text = r.text.lower()
+            found_patterns = []
+            for pattern in error_patterns:
+                if pattern.lower() in page_text:
+                    found_patterns.append(pattern)
+            if found_patterns:
+                return f"{Fore.RED}{url} - {', '.join(found_patterns)}"
+
+            # Check beautifulsoup for error patterns
+            soup = BeautifulSoup(r.text, "html.parser")
+            if soup.find("title") and "404" in soup.find("title").text.lower():
+                pass
+            elif soup.find("title") and "Page Not Found" in soup.find("title").text.lower():
+                pass
+            elif r.status_code == 403:
+                pass
+            elif r.status_code == 200:
                 return f"{Fore.GREEN}{url}"
+            elif r.status_code == 404:
+                pass
             else:
                 return f"{Fore.RED}{url} [{r.status_code}]"
         except requests.RequestException:
@@ -1035,8 +1191,12 @@ if args.api_fuzzer:
         futures = [executor.submit(check_endpoint, endpoint) for endpoint in api_endpoints]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
-            if result.startswith(Fore.GREEN):
-                print(result)
+            if result is not None:
+                if result.startswith(Fore.GREEN):
+                    print(result)
+            else:
+                pass
+            
 
 if args.shodan:
     key = input("Shodan Key: ")
@@ -2231,6 +2391,7 @@ if args.openredirect:
         f"///{TEST_DOMAIN}%40{TEST_DOMAIN}",
         f"////{TEST_DOMAIN}//",
         f"/https://{TEST_DOMAIN}",
+        f"{TEST_DOMAIN}",
     ]
 
     def test_single_payload(url, payload, original_netloc):
@@ -2388,17 +2549,23 @@ if args.subdomaintakeover:
     ]
 
     def check_subdomain(subdomain):
+        potential_takeover = set()
         url = f"https://{subdomain}"
         try:
             response = requests.get(url)
             if response.status == 404:
                 print(f"[Potential Takeover] {subdomain} - 404 Not Found")
+                potential_takeover.add(subdomain)
+                # Save potential takeovers to a file for further analysis
+                with open('potential_takeover.txt', 'w') as f:
+                    for sub in potential_takeover:
+                        f.write(f"{sub}\n")
             elif response.status == 200:
                 print(f"[Active] {subdomain} - 200 OK")
             else:
                 print(f"[Other] {subdomain} - Status Code: {response.status}")
         except requests.RequestException:
-            print(f"{Fore.RED}[Error] {Fore.CYAN}{subdomain} - {Fore.RED}Could not connect{Style.RESET_ALL}")
+            pass
 
     def check_dns(subdomain):
         try:
@@ -2413,15 +2580,19 @@ if args.subdomaintakeover:
             print(f"{Fore.RED}[DNS Error] {Fore.CYAN}{subdomain} - {Fore.RED}{e}{Style.RESET_ALL}")
 
     def check_whois(target):
+        vuln_subs = set()
         try:
             w = whois.whois(target)
             org_name = w.org if w.org else "Unknown"
             print(f"{Fore.MAGENTA}[WHOIS] {Fore.CYAN}{target}{Style.RESET_ALL} - Organization: {Fore.GREEN}{org_name}{Style.RESET_ALL}")
-
             for service in COMMON_SERVICES:
                 if service.lower() in org_name.lower():
+                    vuln_subs.add(target)
                     print(f"{Fore.YELLOW}[Potential Takeover] {Fore.CYAN}{target} is associated with {Fore.GREEN}{org_name} - Common service{Style.RESET_ALL}")
                     break
+            with open(f'{args.save}', 'w') as f:
+                for sub in vuln_subs:
+                    f.write(f"{sub}\n")
         except Exception as e:
             print(f"{Fore.RED}[WHOIS Error] {Fore.CYAN}{target} - {Fore.RED}{e}{Style.RESET_ALL}")
 
@@ -2470,6 +2641,10 @@ if args.autorecon:
             target = target.replace("http://", "").replace("https://", "")
         if target.startswith("www."):
             target = target[4:]
+        if target.startswith("https://www."):
+            target = target[8:]
+        if target.endswith("/"):
+            target = target[:-1]
         ports = scan(f"naabu -host {target} -silent")
         return ports
     
@@ -2487,9 +2662,50 @@ if args.autorecon:
             pass
         return tech
     
+    async def ssl_vuln_scan(target):
+        TLS_VERSION = []
+        TLS_VULN_VERSION = ["TLSv1.0", "TLSv1.1", "SSLv2", "SSLv3"]
+
+        def check_ssl(domain: str, port: int = 443):
+            try:
+                context = ssl.create_default_context()
+                with socket.create_connection((domain, port), timeout=5) as sock:
+                    with context.wrap_socket(sock, server_hostname=domain) as ssock:
+                        cert = ssock.getpeercert()
+                        TLS_VERSION.append(ssock.version())
+                        return f"TLS Version: {ssock.version()}\nCipher Suite: {ssock.cipher()[0]}\nIssuer: {cert['issuer'][0][0]}\nSubject: {cert['subject'][0][0]}\nValid From: {datetime.strptime(cert['notBefore'], '%b %d %H:%M:%S %Y %Z').strftime('%Y-%m-%d %H:%M:%S')}\nValid To: {datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z').strftime('%Y-%m-%d %H:%M:%S')}"
+            except Exception as e:
+                print(f"Error checking SSL: {e}")
+
+
+        def save_ssl_info(domain: str, info: str, port: int = 443):
+            if info:
+                with open('ssl_info.txt', 'w') as f:
+                    f.write(info)
+
+        if "http://" in target or "https://" in target:
+            target = target.replace("http://", "").replace("https://", "")
+        if "www." in target:
+            target = target[4:]
+        if "https://www." in target:
+            target = target[8:]
+        if target.endswith("/"):
+            target = target[:-1]
+
+        info = check_ssl(target)
+        if TLS_VERSION in TLS_VULN_VERSION:
+            print(f"{TLS_VERSION}: VULNERABLE!")
+            print(f"Mitigation: Please update your SSL/TLS version to a more secure version.")
+        save_ssl_info(target, info)
+        return info
+    
     async def headers_info(target: str):
-        s = requests.Session()
-        r = s.get(target, verify=False, headers=header)
+        try:
+            s = requests.Session()
+            r = s.get(target, verify=False, headers=header)
+        except Exception as e:
+            print(f"Error fetching {target}: {e}")
+            return []
         http_headers = []
         for k,v in r.headers.items():
             http_headers.append(f"{k}: {v}")    
@@ -2524,8 +2740,7 @@ if args.autorecon:
 
     async def extract_js_files(links, target):
         print(f"{Fore.MAGENTA}Extracting JavaScript files from links...{Style.RESET_ALL}")
-        js_files = set()
-        total_links = len(links)  
+        js_files = set() 
         target_parsed = urlparse(target)  
         async with aiohttp.ClientSession() as session:
             for link in links:
@@ -2578,7 +2793,7 @@ if args.autorecon:
         print(f"{Fore.MAGENTA}Running autorecon for {Fore.CYAN}{target}{Style.RESET_ALL}\n")
         shodankey = input(f"{Fore.CYAN}Enter your Shodan API key: {Style.RESET_ALL}")
         print("\n")
-        with alive_bar(10, title='Running autorecon') as bar:  # Adjusted to 4 since we added Shodan search
+        with alive_bar(12, title='Running autorecon') as bar:
             site_links = await crawl_site(target)
             print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
             with open('site_links.txt', 'w') as f:
@@ -2624,7 +2839,7 @@ if args.autorecon:
             #Get headers
             getheaders = await headers_info(target)
             target2 = target.replace("https://", "").replace("http://", "").replace("www.", "")
-            with open(f"{target2}_headers.txt", "w") as f:
+            with open(f"headers.txt", "w") as f:
                 for header in getheaders:
                     f.write(f"{header}\n")
             bar()
@@ -2671,7 +2886,35 @@ if args.autorecon:
                 for result in shodan_results:
                     f.write(f"{result}\n")
             bar()  # Update after Shodan search
+
+            ssl_scan = await ssl_vuln_scan(target)  
+            print(f"{Fore.MAGENTA}TLS/SSL Scan: {Fore.CYAN}ssl_info.txt{Style.RESET_ALL}")
+            bar()
+
+            scanner = S3Scanner()
+            s3_results = await scanner.scan(target)
+            scanner.save_results(target)
+            bar()
             
     if __name__ == "__main__":
         target_url = args.autorecon
         asyncio.run(main(target_url))
+
+if args.jwt_scan:
+    analyzer = JWTAnalyzer()
+    analyzer.analyze_token(args.jwt_scan)
+elif args.jwt_modify:
+    analyzer = JWTAnalyzer()
+    analyzer.modify_token(args.jwt_modify)
+
+async def handle_s3_scan(target):
+    print(f"\n{Fore.MAGENTA}Starting S3 bucket scan for {Fore.CYAN}{target}{Style.RESET_ALL}")
+    scanner = S3Scanner()
+    with alive_bar(1, title='Scanning S3 buckets') as bar:
+        results = await scanner.scan(target)
+        scanner.save_results(target)
+        bar()
+    return results
+
+if args.s3_scan:
+    asyncio.run(handle_s3_scan(args.s3_scan))
