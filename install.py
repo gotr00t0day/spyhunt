@@ -77,9 +77,12 @@ def install_go_tool(tool, package):
         print(f"Failed to install {tool}")  # Removed colorama formatting
 
 def check_wsl():
-    if platform.system() == "Linux":
-        with open('/proc/version', 'r') as f:
-            return 'microsoft' in f.read().lower()
+    try:
+        if platform.system() == "Linux":
+            with open('/proc/version', 'r') as f:
+                return 'microsoft' in f.read().lower()
+    except (PermissionError, IOError) as e:
+        print(f"Warning: Could not check WSL status: {e}")
     return False
 
 def update_upgrade_system(package_manager):
