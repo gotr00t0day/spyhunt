@@ -337,3 +337,11 @@ AWS S3 Bucket Enumeration
 ```
 python3 spyhunt.py --s3-scan bucket.com
 ```
+Heap Dump Analysis 
+```
+python3 spyhunt.py --heapdump heapdump_file
+```
+Sprint Boot Actuator Scan
+```
+python3 spyhunt.py --heapds domains.txt
+```

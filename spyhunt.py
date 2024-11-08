@@ -18,6 +18,7 @@ from ratelimit import limits, sleep_and_retry
 from modules.jwt_analyzer import JWTAnalyzer
 from modules.ss3sec import S3Scanner
 from datetime import datetime
+from modules.heap_dump import HeapdumpAnalyzer
 import waybackpy
 import threading
 import os.path
@@ -70,7 +71,7 @@ banner = f"""
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-{Fore.WHITE}V 2.8
+{Fore.WHITE}V 2.9
 {Fore.WHITE}By c0deninja
 {Fore.RESET}
 """
@@ -314,6 +315,11 @@ vuln_group.add_argument('-jwt-modify', '--jwt_modify',
                      type=str, help='modify JWT token',
                      metavar='token')
 
+vuln_group.add_argument('-heapds', '--heapdump_scan',
+                     type=str, help='scan for heapdump endpoints',
+                     metavar='domain.com')
+
+
 parser.add_argument('--s3-scan', help='Scan for exposed S3 buckets')
 
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
@@ -331,6 +337,16 @@ fuzzing_group.add_argument("-x", "--exclude", help="Comma-separated list of stat
 update_group.add_argument('-u', '--update', action='store_true', help='Update the script')
 
 parser.add_argument('--shodan-api', help='Shodan API key for subdomain enumeration')
+
+parser.add_argument('--proxy', help='Use a proxy (e.g., http://proxy.com:8080)')
+
+parser.add_argument('--proxy-file', help='Load proxies from file')
+
+parser.add_argument('--heapdump', help='Analyze Java heapdump file')
+
+parser.add_argument('--output-dir', help='Output directory', default='.')
+
+
 
 
 args = parser.parse_args()
@@ -645,6 +661,27 @@ if args.corsmisconfig:
 
 
 if args.hostheaderinjection:
+    def setup_proxies(proxy=None, proxy_file=None):
+        """Setup proxy configuration"""
+        proxies = []
+        if proxy:
+            if not proxy.startswith(('http://', 'https://', 'socks4://', 'socks5://')):
+                proxy = f"http://{proxy}"
+            proxies.append({'http': proxy, 'https': proxy})
+            
+        if proxy_file:
+            try:
+                with open(proxy_file, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            proxy = line.strip()
+                            if not proxy.startswith(('http://', 'https://', 'socks4://', 'socks5://')):
+                                proxy = f"http://{proxy}"
+                            proxies.append({'http': proxy, 'https': proxy})
+            except Exception as e:
+                print(f"{Fore.RED}Error loading proxy file: {str(e)}{Style.RESET_ALL}")
+        return proxies
+
     def check_host_header_injection(domainlist):
         session = requests.Session()
         headers = {
@@ -656,32 +693,75 @@ if args.hostheaderinjection:
             "X-Remote-Addr": "evil.com",
             "X-Host": "evil.com"
         }
+
+        # Get proxy list
+        proxies = setup_proxies(args.proxy, args.proxy_file)
+        current_proxy = None
+
         try:
-            normal_resp = session.get(domainlist, verify=False, timeout=5)
+            # Select proxy if available
+            if proxies:
+                current_proxy = random.choice(proxies)
+
+            # Normal request with proxy
+            normal_resp = session.get(
+                domainlist, 
+                verify=False, 
+                timeout=5,
+                proxies=current_proxy
+            )
             normal_content = normal_resp.text
 
             for header_name, header_value in headers.items():
-                resp = session.get(domainlist, verify=False, headers={header_name: header_value}, timeout=5)
-                
-                if resp.status_code in {301, 302, 303, 307, 308}:
-                    location = resp.headers.get('Location', '').lower()
-                    if location == "evil.com":
-                        print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(Redirect to evil.com in Location header)")
-                        return
+                try:
+                    resp = session.get(
+                        domainlist, 
+                        verify=False, 
+                        headers={header_name: header_value}, 
+                        timeout=5,
+                        proxies=current_proxy
+                    )
                     
-                if resp.text != normal_content:
-                    if 'evil.com' in resp.text.lower():
-                        print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(evil.com found in response body)")
-                        return
+                    if resp.status_code in {301, 302, 303, 307, 308}:
+                        location = resp.headers.get('Location', '').lower()
+                        if location == "evil.com":
+                            print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(Redirect to evil.com in Location header)")
+                            return
+                        
+                    if resp.text != normal_content:
+                        if 'evil.com' in resp.text.lower():
+                            soup = BeautifulSoup(resp.text, 'html.parser')
+                            title = soup.title.string
+                            if "Evil.Com" in title:
+                                print(f"{Fore.RED}VULNERABLE: {Fore.GREEN}{domainlist} {Fore.YELLOW}(evil.com found in response body)")
+                                print(f"{Fore.YELLOW}Title: {Fore.GREEN}{title}")
+                                return
+                            else:
+                                pass
+
+                except requests.exceptions.ProxyError:
+                    if proxies:
+                        current_proxy = random.choice(proxies)
+                    continue
+                except requests.exceptions.ConnectTimeout:
+                    print(f"{Fore.RED}Proxy connection timeout{Style.RESET_ALL}")
+                    continue
 
             print(f"{Fore.CYAN}Not Vulnerable: {Fore.GREEN}{domainlist}")
 
-        except requests.exceptions.RequestException as e: 
+        except requests.exceptions.RequestException as e:
+            if "proxy" in str(e).lower():
+                pass
             pass
 
     def main(args):
         print(f"{Fore.MAGENTA}\t\t Host Header Injection \n")
         print(f"{Fore.WHITE}Checking for {Fore.CYAN}X-Forwarded-Host {Fore.WHITE}and {Fore.CYAN}Host {Fore.WHITE}injections.....\n")
+
+        if args.proxy:
+            print(f"{Fore.YELLOW}Using proxy: {args.proxy}{Style.RESET_ALL}")
+        elif args.proxy_file:
+            print(f"{Fore.YELLOW}Loading proxies from: {args.proxy_file}{Style.RESET_ALL}")
 
         with open(args.hostheaderinjection, "r") as f:
             domains = [x.strip() for x in f.readlines()]
@@ -1823,10 +1903,10 @@ if args.sqli_scan:
 
     if __name__ == "__main__":
         vulnerabilities = sqli_scanner(args.sqli_scan)
-        if not vulnerabilities:
-            print(f"\n{Fore.GREEN}No SQL Injection vulnerabilities found.{Fore.RESET}")
-        else:
+        if vulnerabilities:
             print(f"\n{Fore.RED}Total SQL Injection vulnerabilities found: {len(vulnerabilities)}{Fore.RESET}")
+        else:
+            print(f"\n{Fore.GREEN}No SQL Injection vulnerabilities found.{Fore.RESET}")
 
 
 if args.webserver_scan:
@@ -2900,3 +2980,10 @@ async def handle_s3_scan(target):
 
 if args.s3_scan:
     asyncio.run(handle_s3_scan(args.s3_scan))
+
+if args.heapdump:
+    analyzer = HeapdumpAnalyzer()
+    analyzer.analyze(args.heapdump, args.output_dir)
+
+if args.heapdump_scan:
+    scan(f"python3 heapdump_scan.py --url {args.heapdump_scan}")
