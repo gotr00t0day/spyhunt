@@ -269,6 +269,10 @@ Host Header Injection
 ```
 python3 spyhunt.py -hh domains.txt
 ```
+Host Header Injection With proxy
+```
+python3 spyhunt.py -hh domains.txt --proxy http://proxy.com:8080
+```
 Directory Brute Forcing
 ```
 python3 spyhunt.py --directorybrute domain.com --wordlist list.txt --threads 50 -e php,txt,html -x 404,403
