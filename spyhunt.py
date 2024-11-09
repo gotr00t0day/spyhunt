@@ -2986,4 +2986,4 @@ if args.heapdump:
     analyzer.analyze(args.heapdump, args.output_dir)
 
 if args.heapdump_scan:
-    scan(f"python3 heapdump_scan.py --url {args.heapdump_scan}")
+    commands(f"python3 modules/heapdump_scan.py --file {args.heapdump_scan}")
