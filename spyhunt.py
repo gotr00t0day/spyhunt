@@ -315,9 +315,14 @@ vuln_group.add_argument('-jwt-modify', '--jwt_modify',
                      type=str, help='modify JWT token',
                      metavar='token')
 
-vuln_group.add_argument('-heapds', '--heapdump_scan',
-                     type=str, help='scan for heapdump endpoints',
+vuln_group.add_argument('-heapds', '--heapdump_file',
+                     type=str, help='file for heapdump scan',
+                     metavar='heapdump.txt')
+
+vuln_group.add_argument('-heapts', '--heapdump_target',
+                     type=str, help='target for heapdump scan',
                      metavar='domain.com')
+
 
 
 parser.add_argument('--s3-scan', help='Scan for exposed S3 buckets')
@@ -2985,5 +2990,8 @@ if args.heapdump:
     analyzer = HeapdumpAnalyzer()
     analyzer.analyze(args.heapdump, args.output_dir)
 
-if args.heapdump_scan:
-    commands(f"python3 modules/heapdump_scan.py --file {args.heapdump_scan}")
+if args.heapdump_file:
+    commands(f"python3 modules/heapdump_scan.py --file {args.heapdump_file}")
+
+if args.heapdump_target:
+    commands(f"python3 modules/heapdump_scan.py --url {args.heapdump_target} --timeout 10")
