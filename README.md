@@ -355,7 +355,7 @@ python3 spyhunt.py --heapdump_file heapdump.txt
 ```
 Cloud Aws Scan
 ```
-python3 spyhunt.py --azure_scan domain.com
+python3 spyhunt.py --aws_scan domain.com
 ```
 Cloud Azure Scan
 ```
