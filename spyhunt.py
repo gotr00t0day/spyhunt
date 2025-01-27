@@ -71,7 +71,7 @@ banner = f"""
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-{Fore.WHITE}V 2.9
+{Fore.WHITE}V 3.0
 {Fore.WHITE}By c0deninja
 {Fore.RESET}
 """
@@ -350,6 +350,15 @@ parser.add_argument('--proxy-file', help='Load proxies from file')
 parser.add_argument('--heapdump', help='Analyze Java heapdump file')
 
 parser.add_argument('--output-dir', help='Output directory', default='.')
+
+# Add after existing argument groups
+cloud_group = parser.add_argument_group('Cloud Security')
+cloud_group.add_argument('-aws', '--aws-scan',
+                    type=str, help='Scan for exposed AWS resources',
+                    metavar='domain.com')
+cloud_group.add_argument('-az', '--azure-scan',
+                    type=str, help='Scan for exposed Azure resources',
+                    metavar='domain.com')
 
 
 
@@ -2995,3 +3004,168 @@ if args.heapdump_file:
 
 if args.heapdump_target:
     commands(f"python3 modules/heapdump_scan.py --url {args.heapdump_target} --timeout 10")
+
+if args.aws_scan:
+    init(autoreset=True)
+    
+    def check_aws_services(domain):
+        aws_endpoints = {
+            'S3': [f'http://{domain}.s3.amazonaws.com', f'https://{domain}.s3.amazonaws.com'],
+            'CloudFront': [f'https://{domain}.cloudfront.net'],
+            'ELB': [f'{domain}.elb.amazonaws.com', f'{domain}.elb.us-east-1.amazonaws.com'],
+            'API Gateway': [f'https://{domain}.execute-api.us-east-1.amazonaws.com'],
+            'Lambda': [f'https://{domain}.lambda-url.us-east-1.amazonaws.com'],
+            'ECR': [f'https://{domain}.dkr.ecr.us-east-1.amazonaws.com'],
+            'ECS': [f'https://{domain}.ecs.us-east-1.amazonaws.com'],
+        }
+        
+        findings = []
+        with alive_bar(len(aws_endpoints), title='Scanning AWS Services') as bar:
+            for service, urls in aws_endpoints.items():
+                for url in urls:
+                    try:
+                        response = requests.get(url, timeout=10, verify=False)
+                        if response.status_code != 404:
+                            findings.append({
+                                'service': service,
+                                'url': url,
+                                'status': response.status_code,
+                                'headers': dict(response.headers)
+                            })
+                    except requests.RequestException:
+                        pass
+                bar()
+        return findings
+
+    def check_iam_exposure(domain):
+        iam_endpoints = [
+            f'https://iam.{domain}',
+            f'https://sts.{domain}',
+            f'https://signin.{domain}'
+        ]
+        findings = []
+        
+        print(f"\n{Fore.CYAN}Checking for exposed IAM endpoints...{Style.RESET_ALL}")
+        for endpoint in iam_endpoints:
+            try:
+                response = requests.get(endpoint, timeout=5, verify=False)
+                if response.status_code != 404:
+                    findings.append({
+                        'endpoint': endpoint,
+                        'status': response.status_code
+                    })
+            except requests.RequestException:
+                continue
+        return findings
+
+    target = args.aws_scan
+    print(f"\n{Fore.MAGENTA}Starting AWS Security Scan for {Fore.CYAN}{target}{Style.RESET_ALL}")
+    
+    # Scan AWS services
+    aws_findings = check_aws_services(target)
+    if aws_findings:
+        print(f"\n{Fore.RED}Found exposed AWS services:{Style.RESET_ALL}")
+        for finding in aws_findings:
+            print(f"\nService: {Fore.YELLOW}{finding['service']}{Style.RESET_ALL}")
+            print(f"URL: {Fore.CYAN}{finding['url']}{Style.RESET_ALL}")
+            print(f"Status: {finding['status']}")
+            
+    # Check IAM exposure
+    iam_findings = check_iam_exposure(target)
+    if iam_findings:
+        print(f"\n{Fore.RED}Found exposed IAM endpoints:{Style.RESET_ALL}")
+        for finding in iam_findings:
+            print(f"Endpoint: {Fore.CYAN}{finding['endpoint']}{Style.RESET_ALL}")
+            print(f"Status: {finding['status']}")
+            
+    # Save results
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(f'aws_scan_{timestamp}.json', 'w') as f:
+        json.dump({
+            'aws_services': aws_findings,
+            'iam_endpoints': iam_findings
+        }, f, indent=4)
+    print(f"\n{Fore.GREEN}Results saved to aws_scan_{timestamp}.json{Style.RESET_ALL}")
+
+if args.azure_scan:
+    init(autoreset=True)
+    
+    def check_azure_services(domain):
+        azure_endpoints = {
+            'Storage': [f'https://{domain}.blob.core.windows.net',
+                       f'https://{domain}.file.core.windows.net',
+                       f'https://{domain}.queue.core.windows.net'],
+            'WebApps': [f'https://{domain}.azurewebsites.net'],
+            'Functions': [f'https://{domain}.azurewebsites.net/api'],
+            'KeyVault': [f'https://{domain}.vault.azure.net'],
+            'Database': [f'https://{domain}.database.windows.net'],
+            'ServiceBus': [f'https://{domain}.servicebus.windows.net']
+        }
+        
+        findings = []
+        with alive_bar(len(azure_endpoints), title='Scanning Azure Services') as bar:
+            for service, urls in azure_endpoints.items():
+                for url in urls:
+                    try:
+                        response = requests.get(url, timeout=10, verify=False)
+                        if response.status_code != 404:
+                            findings.append({
+                                'service': service,
+                                'url': url,
+                                'status': response.status_code,
+                                'headers': dict(response.headers)
+                            })
+                    except requests.RequestException:
+                        pass
+                bar()
+        return findings
+
+    def check_management_endpoints(domain):
+        mgmt_endpoints = [
+            f'https://management.{domain}',
+            f'https://portal.{domain}',
+            f'https://scm.{domain}'
+        ]
+        findings = []
+        
+        print(f"\n{Fore.CYAN}Checking for exposed management endpoints...{Style.RESET_ALL}")
+        for endpoint in mgmt_endpoints:
+            try:
+                response = requests.get(endpoint, timeout=5, verify=False)
+                if response.status_code != 404:
+                    findings.append({
+                        'endpoint': endpoint,
+                        'status': response.status_code
+                    })
+            except requests.RequestException:
+                continue
+        return findings
+
+    target = args.azure_scan
+    print(f"\n{Fore.MAGENTA}Starting Azure Security Scan for {Fore.CYAN}{target}{Style.RESET_ALL}")
+    
+    # Scan Azure services
+    azure_findings = check_azure_services(target)
+    if azure_findings:
+        print(f"\n{Fore.RED}Found exposed Azure services:{Style.RESET_ALL}")
+        for finding in azure_findings:
+            print(f"\nService: {Fore.YELLOW}{finding['service']}{Style.RESET_ALL}")
+            print(f"URL: {Fore.CYAN}{finding['url']}{Style.RESET_ALL}")
+            print(f"Status: {finding['status']}")
+            
+    # Check management endpoints
+    mgmt_findings = check_management_endpoints(target)
+    if mgmt_findings:
+        print(f"\n{Fore.RED}Found exposed management endpoints:{Style.RESET_ALL}")
+        for finding in mgmt_findings:
+            print(f"Endpoint: {Fore.CYAN}{finding['endpoint']}{Style.RESET_ALL}")
+            print(f"Status: {finding['status']}")
+            
+    # Save results
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(f'azure_scan_{timestamp}.json', 'w') as f:
+        json.dump({
+            'azure_services': azure_findings,
+            'management_endpoints': mgmt_findings
+        }, f, indent=4)
+    print(f"\n{Fore.GREEN}Results saved to azure_scan_{timestamp}.json{Style.RESET_ALL}")
