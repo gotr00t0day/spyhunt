@@ -1,6 +1,5 @@
 from colorama import Fore, init, Style
 from os import path
-from builtwith import builtwith
 from modules.favicon import *
 from bs4 import BeautifulSoup
 from multiprocessing.pool import ThreadPool
@@ -117,10 +116,6 @@ parser.add_argument('-th', '--threads',
 
 passiverecon_group.add_argument('-s',
                     type=str, help='scan for subdomains',
-                    metavar='domain.com')
-
-passiverecon_group.add_argument('-t', '--tech',
-                    type=str, help='find technologies',
                     metavar='domain.com')
 
 passiverecon_group.add_argument('-d', '--dns',
@@ -1024,16 +1019,6 @@ if args.brokenlinks:
             print(Fore.CYAN + "ERROR!")
     else:
         commands(f"blc -r --filter-level 2 {args.brokenlinks}")
-
-if args.tech:
-    try:
-        print("\n")
-        print (Fore.CYAN + "Scanning..." + "\n")
-        info = builtwith(f"{args.tech}")
-        for framework, tech in info.items():
-            print (Fore.GREEN + framework, ":", tech)
-    except UnicodeDecodeError:
-        pass
 
 if args.smuggler:
     smug_path = os.path.abspath(os.getcwd())
