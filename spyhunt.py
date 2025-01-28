@@ -52,6 +52,8 @@ import urllib
 import nmap3
 import ssl
 import shutil
+import dns.zone
+import dns.query
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -353,6 +355,11 @@ cloud_group.add_argument('-aws', '--aws-scan',
                     metavar='domain.com')
 cloud_group.add_argument('-az', '--azure-scan',
                     type=str, help='Scan for exposed Azure resources',
+                    metavar='domain.com')
+
+# Add to argument groups
+vuln_group.add_argument('-zt', '--zone-transfer', 
+                    type=str, help='Test for DNS zone transfer vulnerability',
                     metavar='domain.com')
 
 
@@ -3154,3 +3161,57 @@ if args.azure_scan:
             'management_endpoints': mgmt_findings
         }, f, indent=4)
     print(f"\n{Fore.GREEN}Results saved to azure_scan_{timestamp}.json{Style.RESET_ALL}")
+
+# Add implementation
+if args.zone_transfer:
+    print(f"{Fore.MAGENTA}Testing DNS Zone Transfer for {Fore.CYAN}{args.zone_transfer}{Style.RESET_ALL}\n")
+    
+    def get_nameservers(domain):
+        try:
+            answers = dns.resolver.resolve(domain, 'NS')
+            return [str(rdata.target).rstrip('.') for rdata in answers]
+        except Exception as e:
+            print(f"{Fore.RED}Error getting nameservers: {e}{Style.RESET_ALL}")
+            return []
+
+    def test_zone_transfer(domain, nameserver):
+        try:
+            # Attempt zone transfer
+            z = dns.zone.from_xfr(dns.query.xfr(nameserver, domain))
+            names = z.nodes.keys()
+            records = []
+            
+            # Get all records
+            for n in names:
+                record = z[n].to_text(n)
+                records.append(record)
+                print(f"{Fore.GREEN}[+] {Fore.CYAN}{record}{Style.RESET_ALL}")
+            
+            # Save results if vulnerable
+            if records:
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                with open(f'zone_transfer_{domain}_{timestamp}.txt', 'w') as f:
+                    f.write(f"DNS Zone Transfer Results for {domain}\n")
+                    f.write(f"Nameserver: {nameserver}\n\n")
+                    for record in records:
+                        f.write(f"{record}\n")
+                print(f"\n{Fore.RED}[!] Zone Transfer VULNERABLE!{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}Results saved to zone_transfer_{domain}_{timestamp}.txt{Style.RESET_ALL}")
+            
+        except Exception as e:
+            print(f"{Fore.YELLOW}[-] Zone transfer failed for {nameserver}: {e}{Style.RESET_ALL}")
+
+    domain = args.zone_transfer
+    nameservers = get_nameservers(domain)
+    
+    if nameservers:
+        print(f"{Fore.MAGENTA}Found nameservers:{Style.RESET_ALL}")
+        for ns in nameservers:
+            print(f"{Fore.CYAN}[*] {ns}{Style.RESET_ALL}")
+        
+        print(f"\n{Fore.MAGENTA}Testing zone transfer on each nameserver...{Style.RESET_ALL}\n")
+        for ns in nameservers:
+            print(f"{Fore.CYAN}Testing {ns}...{Style.RESET_ALL}")
+            test_zone_transfer(domain, ns)
+    else:
+        print(f"{Fore.RED}No nameservers found for {domain}{Style.RESET_ALL}")
