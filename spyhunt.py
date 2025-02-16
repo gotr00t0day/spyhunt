@@ -1296,7 +1296,8 @@ if args.forbiddenpass:
         except FileNotFoundError as e:
             print(f"File not found: {e}")
 
-    wordlist = word_list("payloads/bypasses.txt")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    wordlist = word_list(os.path.join(current_dir, "payloads", "bypasses.txt"))
 
     def header_bypass():
         headers = [
@@ -2720,16 +2721,6 @@ if args.autorecon:
         dnsscan = scan(f"echo {target} | dnsx -silent -recon -j dnsscan.json")
         return dnsscan
     
-    async def techdetect(target):
-        tech = {}
-        try:
-            info = builtwith(f"{target}")
-            for framework, tech in info.items():
-                tech.append(f"{framework}: {tech}")
-        except UnicodeDecodeError:
-            pass
-        return tech
-    
     async def ssl_vuln_scan(target):
         TLS_VERSION = []
         TLS_VULN_VERSION = ["TLSv1.0", "TLSv1.1", "SSLv2", "SSLv3"]
@@ -2861,7 +2852,7 @@ if args.autorecon:
         print(f"{Fore.MAGENTA}Running autorecon for {Fore.CYAN}{target}{Style.RESET_ALL}\n")
         shodankey = input(f"{Fore.CYAN}Enter your Shodan API key: {Style.RESET_ALL}")
         print("\n")
-        with alive_bar(12, title='Running autorecon') as bar:
+        with alive_bar(11, title='Running autorecon') as bar:
             site_links = await crawl_site(target)
             print(f"{Fore.MAGENTA}Found {Fore.CYAN}{len(site_links)}{Style.RESET_ALL} links from crawling.")
             with open('site_links.txt', 'w') as f:
@@ -2926,14 +2917,6 @@ if args.autorecon:
             with open('dns_output.txt', 'w') as f:
                 f.write(f"{dns_output}\n")
             bar()  # Update after dnsscan
-
-            #Techdetect
-            tech = await techdetect(target)
-            print(f"{Fore.MAGENTA}Tech Detect: {Fore.CYAN}{tech}{Style.RESET_ALL}")
-            with open('techdetect.txt', 'w') as f:
-                for techs in tech:
-                    f.write(f"{techs}\n")
-            bar()  # Update after techdetect
 
             parameters = extract_parameters(all_links)
             links_params = set()
