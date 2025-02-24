@@ -54,6 +54,10 @@ import ssl
 import shutil
 import dns.zone
 import dns.query
+import ipinfo
+from ipaddress import ip_network
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -72,7 +76,7 @@ banner = f"""
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-{Fore.WHITE}V 3.0
+{Fore.WHITE}V 3.1
 {Fore.WHITE}By c0deninja
 {Fore.RESET}
 """
@@ -320,6 +324,10 @@ vuln_group.add_argument('-heapts', '--heapdump_target',
                      type=str, help='target for heapdump scan',
                      metavar='domain.com')
 
+fuzzing_group.add_argument('-f_p', '--forbidden_pages',
+                     type=str, help='forbidden pages',
+                     metavar='domain.com')
+
 
 
 parser.add_argument('--s3-scan', help='Scan for exposed S3 buckets')
@@ -363,9 +371,113 @@ vuln_group.add_argument('-zt', '--zone-transfer',
                     metavar='domain.com')
 
 
-
+# Add to argument groups
+ip_group = parser.add_argument_group('IP Information')
+ip_group.add_argument('--ipinfo', type=str, help='Get IP info for a company domain/IP', metavar='TARGET')
+ip_group.add_argument('--token', type=str, help='IPinfo API token', metavar='TOKEN')
+ip_group.add_argument('--save-ranges', type=str, help='Save IP ranges to file', metavar='FILENAME')
+parser.add_argument('--forbidden_domains', help='File containing list of domains to scan for forbidden bypass')
 
 args = parser.parse_args()
+
+# Add new function for IP info scanning
+def scan_ip_info(target, token):
+    """Get IP ranges and ASN information using IPinfo API"""
+    try:
+        # First resolve domain to IP if target is a domain
+        try:
+            ip = socket.gethostbyname(target)
+            if ip != target:
+                print(f"{Fore.CYAN}Resolved {target} to {ip}{Style.RESET_ALL}\n")
+        except socket.gaierror:
+            print(f"{Fore.RED}Could not resolve {target} to IP address{Style.RESET_ALL}")
+            return None
+
+        handler = ipinfo.getHandler(token)
+        print(f"{Fore.MAGENTA}Gathering IP information for {Fore.CYAN}{target}{Style.RESET_ALL}\n")
+        
+        # Get initial IP info using resolved IP
+        details = handler.getDetails(ip)
+        
+        # Print findings
+        print(f"{Fore.GREEN}IP Information:{Style.RESET_ALL}")
+        print(f"IP: {Fore.CYAN}{details.ip}{Style.RESET_ALL}")
+        if hasattr(details, 'hostname') and details.hostname:
+            print(f"Hostname: {Fore.CYAN}{details.hostname}{Style.RESET_ALL}")
+        if hasattr(details, 'org') and details.org:
+            print(f"Organization: {Fore.CYAN}{details.org}{Style.RESET_ALL}")
+        if hasattr(details, 'country') and details.country:
+            print(f"Country: {Fore.CYAN}{details.country}{Style.RESET_ALL}")
+        if hasattr(details, 'city') and details.city:
+            print(f"City: {Fore.CYAN}{details.city}{Style.RESET_ALL}")
+
+        # Get ASN information
+        if hasattr(details, 'org') and details.org:
+            try:
+                org_parts = details.org.split()
+                if org_parts:
+                    asn = org_parts[0]  # Get ASN number
+                    org_name = ' '.join(org_parts[1:])  # Get organization name
+                    
+                    print(f"\n{Fore.GREEN}ASN Information:{Style.RESET_ALL}")
+                    print(f"ASN: {Fore.CYAN}{asn}{Style.RESET_ALL}")
+                    print(f"Organization: {Fore.CYAN}{org_name}{Style.RESET_ALL}")
+                    
+                    # Try to get IP ranges for this ASN
+                    try:
+                        ranges = []
+                        print(f"\n{Fore.GREEN}IP Ranges:{Style.RESET_ALL}")
+                        
+                        # Use a separate request to get ranges
+                        response = requests.get(f"https://ipinfo.io/{asn}/prefixes?token={token}")
+                        if response.status_code == 200:
+                            prefixes_data = response.json()
+                            if 'prefixes' in prefixes_data:
+                                for prefix in prefixes_data['prefixes']:
+                                    try:
+                                        netw = prefix.get('netblock', '')
+                                        if netw:
+                                            network = ip_network(netw)
+                                            ranges.append({
+                                                'range': str(network),
+                                                'num_ips': network.num_addresses
+                                            })
+                                            print(f"{Fore.CYAN}{network}{Fore.YELLOW} ({network.num_addresses} IPs){Style.RESET_ALL}")
+                                    except ValueError as e:
+                                        print(f"{Fore.RED}Error parsing network {netw}: {e}{Style.RESET_ALL}")
+                        
+                        # Save ranges if requested
+                        if args.save_ranges and ranges:
+                            try:
+                                with open(args.save_ranges, 'w') as f:
+                                    f.write(f"# IP Ranges for {target}\n")
+                                    f.write(f"# ASN: {asn}\n")
+                                    f.write(f"# Organization: {org_name}\n\n")
+                                    for r in ranges:
+                                        f.write(f"{r['range']} # {r['num_ips']} IPs\n")
+                                print(f"\n{Fore.GREEN}IP ranges saved to {args.save_ranges}{Style.RESET_ALL}")
+                            except Exception as e:
+                                print(f"{Fore.RED}Error saving IP ranges: {e}{Style.RESET_ALL}")
+                    
+                    except Exception as e:
+                        print(f"{Fore.RED}Error getting IP ranges: {e}{Style.RESET_ALL}")
+                        
+            except Exception as e:
+                print(f"{Fore.RED}Error processing ASN information: {e}{Style.RESET_ALL}")
+
+        return details
+
+    except Exception as e:
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        return None
+
+# Add to main argument handling
+if args.ipinfo:
+    if not args.token:
+        print(f"{Fore.RED}Error: IPinfo API token required. Use --token to provide it.{Style.RESET_ALL}")
+        sys.exit(1)
+    scan_ip_info(args.ipinfo, args.token)
+
 
 user_agent = useragent_list.get_useragent()
 header = {"User-Agent": user_agent}
@@ -538,6 +650,29 @@ if args.s:
                 print(Fore.GREEN + f"Found {len(shodan_subdomains)} subdomains from Shodan")
             except shodan.APIError as e:
                 print(Fore.RED + f"Error querying Shodan: {e}")
+
+if args.forbidden_pages:
+    def save_forbidden_pages(url):
+        with open(f"forbidden_pages.txt", "a") as f:
+            f.write(f"{url}\n")
+    try:
+        s = requests.Session()
+        with open(f"{args.forbidden_pages}") as f:
+            pages = [x.strip() for x in f.readlines()]
+
+        for page in pages:
+            r = s.get(page, verify=False, timeout=10)
+            if r.status_code == 403:
+                print(f"{Fore.RED}{page} [{r.status_code}]{Style.RESET_ALL}")
+                save_forbidden_pages(page)
+            else:
+                pass
+    except requests.exceptions.ReadTimeout:
+        pass
+    except requests.exceptions.ConnectionError:
+        pass
+    except requests.exceptions.RequestException:
+        pass
 
 if args.reverseip:
     domain = socket.gethostbyaddr(args.reverseip)
@@ -1287,7 +1422,7 @@ if args.shodan:
         pass
 
 
-if args.forbiddenpass:
+if args.forbiddenpass or args.forbidden_domains:
     def word_list(wordlist: str) -> str:
         try:
             with open(wordlist, "r") as f:
@@ -1323,10 +1458,51 @@ if args.forbiddenpass:
             {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8080'},
             {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8443'},
             {'User-Agent': str(user_agent), 'X-ProxyUser-Ip': '127.0.0.1'},
-            {'User-Agent': str(user_agent), 'Client-IP': '127.0.0.1'}
+            {'User-Agent': str(user_agent), 'Client-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Real-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Original-URL': '/admin'},
+            {'User-Agent': str(user_agent), 'X-Rewrite-URL': '/admin'},
+            {'User-Agent': str(user_agent), 'X-Originating-URL': '/admin'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Server': 'localhost'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Scheme': 'http'},
+            {'User-Agent': str(user_agent), 'X-Original-Remote-Addr': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Protocol': 'http'},
+            {'User-Agent': str(user_agent), 'X-Original-Host': 'localhost'},
+            {'User-Agent': str(user_agent), 'Proxy-Host': 'localhost'},
+            {'User-Agent': str(user_agent), 'Request-Uri': '/admin'},
+            {'User-Agent': str(user_agent), 'X-Server-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-SSL': 'off'},
+            {'User-Agent': str(user_agent), 'X-Original-URL': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Client-Port': '443'},
+            {'User-Agent': str(user_agent), 'X-Backend-Host': 'localhost'},
+            {'User-Agent': str(user_agent), 'X-Remote-Addr': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Remote-Port': '443'},
+            {'User-Agent': str(user_agent), 'X-Host-Override': 'localhost'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Server': 'localhost:80'},
+            {'User-Agent': str(user_agent), 'X-Host-Name': 'localhost'},
+            {'User-Agent': str(user_agent), 'X-Proxy-URL': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Base-Url': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'HTTP-X-Forwarded-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'HTTP-Client-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'HTTP-X-Real-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Proxy-Url': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forward-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Originally-Forwarded-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Forwarded-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Forwarded-For-Ip': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-By': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-For-Original': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Host-Original': 'localhost'},
+            {'User-Agent': str(user_agent), 'X-Pwnage': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Bypass': '127.0.0.1'},
 
         ]
         return headers
+    
+    def save_forbidden_bypass(url):
+        with open("forbidden_bypass.txt", "a") as f:
+            f.write(f"{url}\n")
     
     def do_request(url: str, stream=False):
         headers = header_bypass()
@@ -1334,30 +1510,52 @@ if args.forbiddenpass:
             for header in headers:
                 if stream:
                     s = requests.Session()
-                    r = s.get(url, stream=True, headers=header)
+                    r = s.get(url, stream=True, headers=header, verify=False, timeout=10)
                 else:
                     s = requests.Session()
-                    r = s.get(url, headers=header)
+                    r = s.get(url, headers=header, verify=False, timeout=10)
                 if r.status_code == 200:
                     print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.GREEN + " [{}]".format(r.status_code))
+                    save_forbidden_bypass(url)
+                elif r.status_code == 403:
+                    print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.RED + " [{}]".format(r.status_code))
                 else:
                     print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.RED + " [{}]".format(r.status_code))
-        except requests.exceptions.ConnectionError as ce_error:
+        except requests.exceptions.ConnectionError:
             pass
-        except requests.exceptions.Timeout as t_error:
-            print("Connection Timeout Error: ", t_error)
+        except requests.exceptions.Timeout:
             pass
-        except requests.exceptions.RequestException as req_err:
-            print("Some Ambiguous Exception:", req_err)
+        except requests.exceptions.RequestException:
             pass
 
-    def main(wordlist):
+    def load_domains(filename: str) -> list:
+        try:
+            with open(filename, "r") as f:
+                return [x.strip() for x in f.readlines()]
+        except FileNotFoundError as e:
+            print(f"{Fore.RED}Domain file not found: {e}{Style.RESET_ALL}")
+            return []
+
+    def scan_domain(domain: str, wordlist: list):
+        if not domain.startswith(('http://', 'https://')):
+            domain = f"https://{domain}"
+        print(f"\n{Fore.YELLOW}Scanning domain: {domain}{Style.RESET_ALL}")
         for bypass in wordlist:
-            links = f"{args.forbiddenpass}{bypass}"
+            links = f"{domain}{bypass}"
             do_request(links)
 
+    def main():
+        if args.forbidden_domains:
+            domains = load_domains(args.forbidden_domains)
+            print(f"{Fore.CYAN}Starting scan of {len(domains)} domains...{Style.RESET_ALL}\n")
+            for domain in domains:
+                scan_domain(domain, wordlist)
+        
+        if args.forbiddenpass:
+            scan_domain(args.forbiddenpass, wordlist)
+
     if __name__ == "__main__":
-        main(wordlist)
+        main()
 
 if args.directorybrute:
     if args.wordlist:
@@ -2823,7 +3021,7 @@ if args.autorecon:
             parsed_url = urlparse(link)
             query_params = parse_qs(parsed_url.query)
             if query_params:
-                parameters[link] = query_params
+                parameters[link] = query_args
         return parameters
 
     def shodan_search(target, api):
@@ -3198,3 +3396,9 @@ if args.zone_transfer:
             test_zone_transfer(domain, ns)
     else:
         print(f"{Fore.RED}No nameservers found for {domain}{Style.RESET_ALL}")
+
+if args.ipinfo:
+    if not args.token:
+        print(f"{Fore.RED}Error: IPinfo API token required. Use --token to provide it.{Style.RESET_ALL}")
+        sys.exit(1)
+    scan_ip_info(args.ipinfo, args.token)

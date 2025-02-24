@@ -71,10 +71,6 @@ sudo python3 install.py
 
 ```
 
-# DEMO
-
-[![asciicast](https://asciinema.org/a/bCVk2NRnb5TJ7aVLV5ZIcnVa3.png)](https://asciinema.org/a/bCVk2NRnb5TJ7aVLV5ZIcnVa3)
-
 # USAGE 
 
 ```
@@ -360,4 +356,12 @@ python3 spyhunt.py --aws_scan domain.com
 Cloud Azure Scan
 ```
 python3 spyhunt.py --azure_scan domain.com
+```
+Checks for 403 forbidden domains and saves it to a file 
+```
+python3 spyhunt.py --forbidden_pages domains.txt
+```
+Scan a list of domains to bypass 403 forbidden
+```
+python3 spyhunt.py --forbidden_domains domains.txt
 ```
