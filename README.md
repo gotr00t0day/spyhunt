@@ -365,3 +365,15 @@ Scan a list of domains to bypass 403 forbidden
 ```
 python3 spyhunt.py --forbidden_domains domains.txt
 ```
+Scan google storage
+```
+python3 spyhunt.py --gcp-scan domain.com
+```
+Brute Forcing Login Forms With Proxies
+```
+python3 spyhunt.py --brute-user-pass domain.com/login --username_wordlist usernames --password_wordlist passwords --proxy-file proxies.txt --verbose
+```
+Brute Forcing Login Forms Witout Proxies
+```
+python3 spyhunt.py --brute-user-pass domain.com/login --username_wordlist usernames --password_wordlist passwords --verbose
+`````
