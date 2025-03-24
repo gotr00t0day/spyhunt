@@ -589,60 +589,75 @@ if args.update:
     else:
         sys.exit(1)
 
-if args.s:
+def process_domain(domain, save_file=None, shodan_api=None):
+    """Process a single domain for subdomain enumeration"""
     current_script_dir = os.path.dirname(os.path.abspath(__file__))
     spotter_path = os.path.join(current_script_dir, 'scripts', 'spotter.sh')
     certsh_path = os.path.join(current_script_dir, 'scripts', 'certsh.sh')
-    if args.save:
-        print(Fore.CYAN + "Saving output to {}...".format(args.save))
-        cmd = f"subfinder -d {args.s} -silent"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        out, err = p.communicate()
-        out = out.decode() 
-        with open(f"{args.save}", "a") as subfinder:
-            subfinder.writelines(out)
-        if path.exists(f"{args.save}"):
-            print(Fore.GREEN + "DONE!")
-        if not path.exists(f"{args.save}"):
-            print(Fore.RED + "ERROR!")
-            sys.exit(1)
-
-        cmd = f"{spotter_path} {args.s} | uniq | sort"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        spotterout, err = p.communicate()
-        spotterout = spotterout.decode()
-        with open(f"{args.save}", "a") as spotter:
-            spotter.writelines(spotterout)
-
-        cmd = f"{certsh_path} {args.s} | uniq | sort"
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        certshout, err = p.communicate()
-        certshout = certshout.decode()
-        with open(f"{args.save}", "a") as certsh:
-            certsh.writelines(certshout)
-
-        # Shodan subdomain extraction
-        if args.shodan_api:
-            api = shodan.Shodan(args.shodan_api)
-            try:
-                results = api.search(f'hostname:*.{args.s}')
-                shodan_subdomains = set()
-                for result in results['matches']:
-                    hostnames = result.get('hostnames', [])
-                    for hostname in hostnames:
-                        if hostname.endswith(args.s) and hostname != args.s:
-                            shodan_subdomains.add(hostname)
-                with open(f"{args.save}", "a") as shodan_file:
-                    for subdomain in sorted(shodan_subdomains):
-                        shodan_file.write(f"{subdomain}\n")
-                print(Fore.GREEN + f"Added {len(shodan_subdomains)} subdomains from Shodan")
-            except shodan.APIError as e:
-                print(Fore.RED + f"Error querying Shodan: {e}")
+    
+    results = []
+    
+    # Subfinder
+    cmd = f"subfinder -d {domain} -silent"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = p.communicate()
+    results.extend(out.decode().splitlines())
+    
+    # Spotter
+    cmd = f"{spotter_path} {domain} | uniq | sort"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    spotterout, _ = p.communicate()
+    results.extend(spotterout.decode().splitlines())
+    
+    # Cert.sh
+    cmd = f"{certsh_path} {domain} | uniq | sort"
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    certshout, _ = p.communicate()
+    results.extend(certshout.decode().splitlines())
+    
+    # Shodan
+    if shodan_api:
+        try:
+            api = shodan.Shodan(shodan_api)
+            results = api.search(f'hostname:*.{domain}')
+            for result in results['matches']:
+                hostnames = result.get('hostnames', [])
+                for hostname in hostnames:
+                    if hostname.endswith(domain) and hostname != domain:
+                        results.append(hostname)
+        except shodan.APIError as e:
+            print(Fore.RED + f"Error querying Shodan for {domain}: {e}")
+    
+    # Remove duplicates and sort
+    results = sorted(set(results))
+    
+    if save_file:
+        with open(save_file, "a") as f:
+            for subdomain in results:
+                if "www." in subdomain:
+                    pass
+                else:
+                    f.write(f"{subdomain}\n")
+        print(Fore.GREEN + f"Found {len(results)} subdomains for {domain}")
     else:
-        commands(f"subfinder -d {args.s}")
-        commands(f"assetfinder -subs-only {args.s} | uniq | sort")
-        commands(f"{spotter_path} {args.s} | uniq | sort")
-        commands(f"{certsh_path} {args.s} | uniq | sort")
+        print(Fore.CYAN + f"\nSubdomains for {domain}:")
+        for subdomain in results:
+            print(subdomain)
+
+# Modify the argument parser to accept either a single domain or a file
+if args.s:
+    if os.path.isfile(args.s):
+        # Reading domains from file
+        print(Fore.CYAN + f"Reading domains from {args.s}")
+        with open(args.s) as f:
+            domains = [line.strip() for line in f if line.strip()]
+        
+        for domain in domains:
+            print(Fore.YELLOW + f"\nProcessing {domain}...")
+            process_domain(domain, args.save, args.shodan_api)
+    else:
+        # Single domain
+        process_domain(args.s, args.save, args.shodan_api)
 
 if args.forbidden_pages:
     def save_forbidden_pages(url):
@@ -3897,7 +3912,8 @@ def try_login_task(username, password, url, form_data, initial_url, success_indi
         )
         
         response_text_lower = response.text.lower()
-        
+
+        print_lock = threading.Lock()
         # Check for 2FA before proceeding
         if detect_2fa(response.text, response.url):
             # Use print_lock to avoid garbled output in multithreaded context

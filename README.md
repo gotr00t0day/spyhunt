@@ -233,9 +233,13 @@ Scan for subdomains and save the output to a file.
 ```
 python3 spyhunt.py -s yahoo.com --save filename.txt
 ```
-Scan for  subdomains but also extract subdomains from shodan
+Scan for subdomains but also extract subdomains from shodan
 ```
 python3 spyhunt.py -s yahoo.com --shodan API_KEY --save filename.txt
+```
+Scan a file of domains to extract subdomains
+```
+python3 spyhunt.py -s domains.txt --save filename.txt
 ```
 Scan for javascript files 
 ```
