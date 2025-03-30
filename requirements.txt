@@ -1,4 +1,6 @@
 colorama
+setuptools
+tqdm
 requests
 shodan
 mmh3
