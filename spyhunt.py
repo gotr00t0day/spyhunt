@@ -334,11 +334,14 @@ fuzzing_group.add_argument('-f_p', '--forbidden_pages',
                      metavar='domain.com')
 
 
+nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
+nuclei_group.add_argument("-nc", "--nuclei", type=str, help="scan nuclei on a target", metavar="domain.com")
+nuclei_group.add_argument("-nct", "--nuclei_template", type=str, help="use a nuclei template", metavar="template.yaml")
+
+
 parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
 
 parser.add_argument("-c", "--concurrency", type=int, default=10, help="Maximum number of concurrent requests")
-
-nuclei_group.add_argument('-nl', '--nuclei_lfi', action='store_true', help="Find Local File Inclusion with nuclei")
 
 passiverecon_group.add_argument('-gs', '--google', action='store_true', help='Google Search')
 
@@ -634,15 +637,15 @@ def process_domain(domain, save_file=None, shodan_api=None):
     if save_file:
         with open(save_file, "a") as f:
             for subdomain in results:
-                if "www." in subdomain:
+                if "www" in subdomain:
                     pass
                 else:
                     f.write(f"{subdomain}\n")
         print(Fore.GREEN + f"Found {len(results)} subdomains for {domain}")
     else:
-        print(Fore.CYAN + f"\nSubdomains for {domain}:")
+        print(Fore.CYAN + f"\nSubdomains for {domain}:\n")
         for subdomain in results:
-            print(subdomain)
+            print(Fore.GREEN + f"{subdomain}")
 
 # Modify the argument parser to accept either a single domain or a file
 if args.s:
@@ -4254,3 +4257,73 @@ if args.brute_user_pass:
         bruteforce_login(args.brute_user_pass, args.username_wordlist, args.password_wordlist, 
                             proxy_file=args.proxy_file, verbose=args.verbose)
 
+if args.nuclei:
+    def nuclei_scan(template: str, url: str) -> str:
+        print(f"Scanning {Fore.GREEN}{url} {Fore.WHITE}with {Fore.MAGENTA}{template}{Fore.WHITE}..\n")
+        nuclei_output = sub_output.subpro_scan(f"nuclei -u {url} -t {template} -silent -c 20 -j -o vulnerable.json")
+        return nuclei_output
+    
+    def nuclei_parser(nuclei_output: str) -> str:
+        try:
+            with open("vulnerable.json", "r") as f:
+                data = [x.strip() for x in f.readlines()]
+            
+            if not data:
+                print(f"{Fore.YELLOW}No vulnerabilities found.{Fore.WHITE}")
+                return
+                
+            results = []
+            for data_item in data:
+                try:
+                    json_result = json.loads(data_item)
+                    
+                    template_id = json_result.get("template-id", "N/A")
+                    matched_at = json_result.get("matched-at", "N/A")
+                    info = json_result.get("info", {})
+                    
+                    name = info.get("name", "Unknown Vulnerability")
+                    description = info.get("description", "No description available")
+                    severity = info.get("severity", "unknown")
+                    
+                    # Print findings
+                    print(f"{Fore.MAGENTA}Template ID: {Fore.GREEN}{template_id}")
+                    print(f"{Fore.MAGENTA}PoC: {Fore.GREEN}{matched_at}")
+                    print(f"{Fore.MAGENTA}Vulnerability: {Fore.GREEN}{name}")
+                    print(f"{Fore.MAGENTA}Description: {Fore.GREEN}{description}")
+                    print(f"{Fore.MAGENTA}Severity: {Fore.RED}{severity}")
+                    print("-" * 60)
+                    
+                    # Append to results
+                    results.append({
+                        "template_id": template_id,
+                        "matched_at": matched_at,
+                        "name": name,
+                        "description": description,
+                        "severity": severity
+                    })
+                except json.JSONDecodeError as e:
+                    print(f"{Fore.RED}Error parsing JSON result: {e}{Fore.WHITE}")
+                    continue
+                
+            return results
+        except FileNotFoundError:
+            print(f"{Fore.RED}Error: vulnerable.json file not found. Nuclei scan may have failed.{Fore.WHITE}")
+            return []
+        except Exception as e:
+            print(f"{Fore.RED}Error processing nuclei output: {str(e)}{Fore.WHITE}")
+            return []
+    
+    def main():
+        template = args.nuclei_template
+        url = args.nuclei
+        if not template or not url:
+            print(f"{Fore.RED}Error: Both template and URL are required for nuclei scanning.{Fore.WHITE}")
+            print(f"Usage: python spyhunt.py --nuclei [URL] --nuclei-template [TEMPLATE_PATH]")
+            return
+            
+        results = nuclei_scan(template, url)
+        nuclei_parser(results)
+    
+    if __name__ == "__main__":
+        main()
+        
