@@ -381,3 +381,7 @@ Brute Forcing Login Forms Witout Proxies
 ```
 python3 spyhunt.py --brute-user-pass domain.com/login --username_wordlist usernames --password_wordlist passwords --verbose
 `````
+Nuclei Scan
+```
+python3 spyhunt.py --nuclei domain.com --nuclei-template nuclei-templates/cves/CVE-2024-22208.yaml
+```
