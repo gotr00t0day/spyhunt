@@ -1,11 +1,10 @@
-
-# DESCRIPTION
+# ⌖ DESCRIPTION
 
 ![Spyhunt](https://github.com/gotr00t0day/spyhunt/blob/main/spyhunt_logo_cropped.png)
 
 Spyhunt is comprehensive network scanning and vulnerability assessment tool. This tool is designed for security professionals and penetration testers to perform comprehensive reconnaissance and vulnerability assessment on target networks and web applications. It combines multiple scanning techniques and integrates various external tools to provide a wide range of information about the target.
 
-## Here's a high-level overview of its functionality
+##  Here's a high-level overview of its functionality
 
 1. It imports various libraries for network operations, web scraping, and parallel processing.
 
@@ -57,7 +56,7 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
 
 8. The script includes a CIDR notation scanner for port scanning across IP ranges.
 
-# INSTALLATION
+# 🔧 INSTALLATION
 
 ```bash
 
@@ -71,7 +70,7 @@ sudo python3 install.py
 
 ```
 
-# USAGE 
+# 🔍 USAGE 
 
 ```
 
@@ -227,7 +226,7 @@ Port Scanning:
 ```
 
 
-# EXAMPLE
+# 🕵️ EXAMPLE
 
 Scan for subdomains and save the output to a file.
 ```
@@ -385,3 +384,5 @@ Nuclei Scan
 ```
 python3 spyhunt.py --nuclei domain.com --nuclei-template nuclei-templates/cves/CVE-2024-22208.yaml
 ```
+## ⚠️ **Disclaimer**
+**Disclaimer: This recon tool is intended for educational and ethical hacking purposes only. Users must have explicit permission from the target organization before using this tool. The developers are not responsible for any misuse or legal repercussions resulting from unauthorized access or data breaches..
