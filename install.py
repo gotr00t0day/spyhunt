@@ -135,6 +135,10 @@ def main():
         
         if is_wsl:
             update_upgrade_system(package_manager)
+            
+        print("✔ Execution permissions granted to scripts in core/features/scripts")
+        # Give execution permissions to all .sh scripts in core/features/scripts
+        run_command("find core/features/scripts -type f -name '*.sh' -exec chmod +x {} \\;")
     elif system == "Darwin":  # macOS
         package_manager = "brew"
         if not which("brew"):
