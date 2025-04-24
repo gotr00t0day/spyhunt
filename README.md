@@ -257,6 +257,10 @@ Web Crawler
 ```
 python3 spyhunt.py -wc https://www.domain.com
 ```
+Web Crawler with depth  
+```
+python3 spyhunt.py -wc https://www.domain.com --depth 5
+```
 Broken Links
 ```
 python3 spyhunt.py -b https://www.domain.com

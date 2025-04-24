@@ -80,7 +80,7 @@ banner = f"""
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-{Fore.WHITE}V 3.2
+{Fore.WHITE}V 3.3
 {Fore.WHITE}By c0deninja
 {Fore.RESET}
 """
@@ -278,8 +278,10 @@ crawlers_group.add_argument('-javascript', '--javascript_scan',
                     metavar='domain.com')
 
 crawlers_group.add_argument('-dp', '--depth',
-                    type=str, help='depth of the crawl',
-                    metavar='10')
+                          type=int,           # Make sure this is int
+                          default=2,
+                          help='Crawling depth (default: 2)',
+                          metavar='DEPTH')
 
 crawlers_group.add_argument('-je', '--javascript_endpoints',
                     type=str, help='extract javascript endpoints',
@@ -378,8 +380,8 @@ cloud_group.add_argument('-gcp', '--gcp-scan',
 vuln_group.add_argument('-zt', '--zone-transfer', 
                     type=str, help='Test for DNS zone transfer vulnerability',
                     metavar='domain.com')
-
-
+                    
+                                       
 # Add to argument groups
 ip_group = parser.add_argument_group('IP Information')
 ip_group.add_argument('--ipinfo', type=str, help='Get IP info for a company domain/IP', metavar='TARGET')
@@ -702,11 +704,88 @@ if args.reverseipmulti:
 
 
 if args.webcrawler:
-    if args.save:
-        print(Fore.CYAN + f"Saving output to {args.save}")
-        commands(f"echo {args.webcrawler} | hakrawler >> {args.save}")
-    else:
-        commands(f"echo {args.webcrawler} | hakrawler")
+    def is_same_domain(url: str, base_domain: str) -> bool:
+        """Check if URL belongs to the same domain"""
+        return urlparse(url).netloc == urlparse(base_domain).netloc
+
+    def get_links(domain: str, visited: set = None) -> set:
+        """Extract links from a webpage"""
+        if visited is None:
+            visited = set()
+        
+        if domain in visited:
+            return set()
+            
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            r = requests.get(domain, headers=headers, verify=False, timeout=5)
+            soup = BeautifulSoup(r.text, "html.parser")
+            links = set()
+            
+            for tag in soup.find_all("a", href=True):
+                href = tag.get("href")
+                if href:
+                    if not href.startswith(("https://", "http://")):
+                        link = urljoin(domain, href)
+                    else:
+                        link = href
+                        
+                    if is_same_domain(link, domain):
+                        links.add(link)
+                        
+            return links
+            
+        except Exception as e:
+            print(f"{Fore.RED}Error crawling {domain}: {str(e)}{Fore.WHITE}")
+            return set()
+
+    def crawl_recursive(domain: str, depth: int, visited: set = None) -> set:
+        """Recursively crawl pages up to specified depth"""
+        if visited is None:
+            visited = set()
+            
+        if depth <= 0 or domain in visited:
+            return set()
+            
+        visited.add(domain)
+        all_links = set()
+        
+        # Get links from current page
+        links = get_links(domain)
+        all_links.update(links)
+        
+        # Recursively crawl discovered links
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = []
+            for link in links:
+                if link not in visited:
+                    futures.append(executor.submit(crawl_recursive, link, depth - 1, visited))
+            
+            # Process results from recursive crawls
+            for future in as_completed(futures):
+                try:
+                    sub_links = future.result()
+                    all_links.update(sub_links)
+                except Exception as e:
+                    print(f"{Fore.RED}Error processing results: {str(e)}{Fore.WHITE}")
+                    
+        return all_links
+
+    if __name__ == "__main__":
+        domain = args.webcrawler
+        depth = int(args.depth)  # Convert to integer explicitly
+        
+        print(f"{Fore.CYAN}Starting crawl of {domain} with depth {depth}...{Fore.WHITE}")
+        
+        # Start recursive crawl
+        all_urls = crawl_recursive(domain, depth)
+        
+        # Print results
+        print(f"\n{Fore.GREEN}Found {len(all_urls)} unique URLs:{Fore.WHITE}")
+        for url in sorted(all_urls):
+            print(url)
 
 
 if args.statuscode:
@@ -4326,4 +4405,5 @@ if args.nuclei:
     
     if __name__ == "__main__":
         main()
+
         
