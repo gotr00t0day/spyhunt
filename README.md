@@ -389,3 +389,7 @@ Nuclei Scan
 ```
 python3 spyhunt.py --nuclei domain.com --nuclei-template nuclei-templates/cves/CVE-2024-22208.yaml
 ```
+SSRF Params
+```
+python3 spyhunt.py --ssrfparams links.txt
+```

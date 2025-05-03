@@ -380,6 +380,10 @@ cloud_group.add_argument('-gcp', '--gcp-scan',
 vuln_group.add_argument('-zt', '--zone-transfer', 
                     type=str, help='Test for DNS zone transfer vulnerability',
                     metavar='domain.com')
+
+# Extract SSRF Paremeters
+
+vuln_group.add_argument('-ssrfp', '--ssrfparams', type=str, help='Get SSRF parameters from a list of domains', metavar='domains.txt')
                     
                                        
 # Add to argument groups
@@ -4405,5 +4409,69 @@ if args.nuclei:
     
     if __name__ == "__main__":
         main()
+
+if args.ssrfparams:
+
+    def domain_list(file):
+        try:
+            with open(args.ssrfparams, 'r') as f:
+                domains = (x.strip() for x in f.readlines())
+            return domains
+        except Exception as e:
+            print(e)
+            return []
+    
+    def check_params(domains):
+        payload_file_path = os.path.join(os.path.dirname(__file__), "payloads", "ssrf_params.txt")
+
+        try:
+            with open(payload_file_path, 'r') as f:
+                
+                payload_set = {line.strip() for line in f if line.strip()}
+            if not payload_set:
+                print(f"{Fore.YELLOW}Warning: Payload file '{payload_file_path}' is empty.{Style.RESET_ALL}", file=sys.stderr)
+                return ""
+        except FileNotFoundError:
+            print(f"{Fore.RED}Error: Payload file not found at '{payload_file_path}'{Style.RESET_ALL}", file=sys.stderr)
+            return "" 
+        except Exception as e:
+            print(f"{Fore.RED}Error loading payloads from '{payload_file_path}': {e}{Style.RESET_ALL}", file=sys.stderr)
+            return ""
+
+        ssrf_payloads_found = set()
+
+        for domain in domains: 
+            try:
+                domain_parsed = urlparse(domain) 
+                query_string = domain_parsed.query 
+
+                if not query_string: 
+                    continue
+
+                params_in_url = parse_qs(query_string)
+
+                for url_param_key in params_in_url.keys():
+                    if url_param_key in payload_set:
+                        ssrf_payloads_found.add(domain) 
+                        break
+            except Exception as e:
+                print(f"{Fore.YELLOW}Warning: Skipping URL '{domain}' due to error: {e}{Style.RESET_ALL}", file=sys.stderr)
+                continue 
+
+        return '\n'.join(sorted(list(ssrf_payloads_found)))
+
+    if __name__ == "__main__":
+        domains_to_check = domain_list(args.ssrfparams) 
+        if domains_to_check: 
+            found_params = check_params(domains_to_check)
+            if found_params:
+                 print(found_params)
+            else:
+                 print(f"{Fore.YELLOW}No URLs found with matching SSRF parameters.{Style.RESET_ALL}")
+
+
+
+    
+
 
         
