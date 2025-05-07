@@ -15,4 +15,5 @@ waybackpy
 ratelimit
 pyjwt
 boto3
-ipinfofake-useragent
+ipinfo
+fake-useragent
