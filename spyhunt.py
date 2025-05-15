@@ -62,6 +62,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from tqdm import tqdm
 from itertools import cycle
+import ftplib # Add this import
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -112,6 +113,7 @@ passiverecon_group = parser.add_argument_group('Passive Recon')
 fuzzing_group = parser.add_argument_group('Fuzzing')
 portscanning_group = parser.add_argument_group('Port Scanning')
 bruteforcing_group = parser.add_argument_group('Bruteforcing')
+ftp_group = parser.add_argument_group('FTP Scanning') # New argument group
 
 group.add_argument('-sv', '--save', action='store',
                    help="save output to file",
@@ -397,6 +399,17 @@ parser.add_argument('--forbidden_domains', help='File containing list of domains
 bruteforcing_group.add_argument('--brute-user-pass', type=str, help='Bruteforcing username and password input fields', metavar='domain.com')
 bruteforcing_group.add_argument('--username_wordlist', type=str, help='Bruteforcing username and password input fields', metavar='domain.com')
 bruteforcing_group.add_argument('--password_wordlist', type=str, help='Bruteforcing username and password input fields', metavar='domain.com')
+
+# FTP arguments
+ftp_group.add_argument('-fs', '--ftp_scan',
+                    type=str, help='FTP server to scan (e.g., host or host:port)',
+                    metavar='HOST[:PORT]')
+ftp_group.add_argument('--ftp-userlist',
+                    type=str, help='Path to a custom username list for FTP bruteforcing',
+                    metavar='users.txt')
+ftp_group.add_argument('--ftp-passlist',
+                    type=str, help='Path to a custom password list for FTP bruteforcing',
+                    metavar='passwords.txt')
 
 args = parser.parse_args()
 
@@ -4470,8 +4483,321 @@ if args.ssrfparams:
                  print(f"{Fore.YELLOW}No URLs found with matching SSRF parameters.{Style.RESET_ALL}")
 
 
+DEFAULT_FTP_PORT = 21
+COMMON_FTP_CREDS = [
+    ("admin", "admin"),
+    ("ftp", "ftp"),
+    ("test", "test"),
+    ("anonymous", "anonymous"),
+    ("anonymous", "guest"),
+    ("admin", "password"),
+    ("administrator", "admin"),
+    ("administrator", "password"),
+    ("user", "user"),
+    ("user", "password"),
+    ("ftpuser", "ftpuser"),
+    ("guest", "guest"),
+    ("testuser", "testuser"),
+    ("root", "root"), # Less common for FTP, but worth a try
+    ("root", "password"), # Less common for FTP, but worth a try
+    ("test", "password"),
+    ("admin", "12345"),
+    ("ftp", "password"),
+    ("user", "12345"),
+    ("default", "default"),
+    ("login", "login"),
+    ("support", "support")
+]
 
+
+KNOWN_VULN_BANNERS = {
+    "vsFTPd 2.3.4": "Critical Backdoor (CVE-2011-2523). Shell listening on port 6200.",
+    "ProFTPD 1.3.3c": "Potential remote command execution vulnerabilities (e.g., CVE-2010-4221 if mod_site_misc is enabled).",
+    "ProFTPD 1.3.5": "Potential RCE via mod_copy (CVE-2015-3306). Verify if mod_copy is enabled.",
+    "Microsoft FTP Service": "Various vulnerabilities depending on version (e.g., IIS 7.5 DoS CVE-2010-3972). Check version and patch level.",
+    "Ability Server 2.34": "Directory Traversal vulnerability (CVE-2004-1633).",
+    "Serv-U FTP Server": "Versions < 15.1.7.259 may have multiple vulnerabilities (e.g., CVE-2019-12181 Directory Traversal). Verify version."
+}
+
+
+def check_banner_vulnerabilities(banner):
+    print(f"{Fore.CYAN}[*] Analyzing banner for known vulnerabilities...{Style.RESET_ALL}")
+    found_vuln = False
+    for vuln_sig, description in KNOWN_VULN_BANNERS.items():
+        if vuln_sig.lower() in banner.lower():
+            print(f"{Fore.RED}[!] Potential Vulnerability Found based on banner:{Style.RESET_ALL}")
+            print(f"    {Fore.YELLOW}Signature: {vuln_sig}{Style.RESET_ALL}")
+            print(f"    {Fore.YELLOW}Description: {description}{Style.RESET_ALL}")
+            found_vuln = True
     
+    if not found_vuln:
+        print(f"{Fore.GREEN}[+] No specific known vulnerabilities matched in the banner from the internal list.{Style.RESET_ALL}")
+    
+    server_software_match = re.search(r"([\w.-]+(?:d|FTPd|Server))\s+([0-9]+\.[0-9]+(?:\.[0-9a-zA-Z.-]+)?)", banner, re.IGNORECASE)
+    if server_software_match:
+        software = server_software_match.group(1).strip()
+        version = server_software_match.group(2).strip()
+        print(f"{Fore.CYAN}    Identified Software: {Fore.WHITE}{software}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}    Identified Version: {Fore.WHITE}{version}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}    Suggestion: Manually verify {software} {version} against vulnerability databases (e.g., CVE Details, Exploit-DB).{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.YELLOW}    Suggestion: Could not reliably parse software/version. Manually check the full banner against vulnerability databases.{Style.RESET_ALL}")
 
 
+def scan_ftp(target_host, target_port=DEFAULT_FTP_PORT, user_list_path=None, pass_list_path=None):
+    print(f"{Fore.MAGENTA}[+] Starting FTP Scan on {Fore.CYAN}{target_host}:{target_port}{Style.RESET_ALL}")
+
+    ftp_connection = None
+    is_tls_connection = False
+    banner = ""
+
+    # Initial Connection Attempt
+    try:
+        print(f"{Fore.CYAN}[*] Connecting to {target_host}:{target_port} (Plain FTP)...{Style.RESET_ALL}")
+        ftp_plain = ftplib.FTP()
+        ftp_plain.connect(target_host, target_port, timeout=10)
+        banner = ftp_plain.getwelcome()
+        print(f"{Fore.GREEN}[+] Plain FTP Banner: {Fore.WHITE}{banner.strip()}{Style.RESET_ALL}")
+        check_banner_vulnerabilities(banner)
+        ftp_connection = ftp_plain
+    except ftplib.all_errors as e:
+        error_str = str(e).upper()
+        if "421" in str(e) and ("TLS" in error_str or "SSL" in error_str or "SECURITY MECHANISMS" in error_str or "MUST NEGOTIATE" in error_str or "PLEASE RECONNECT USING TLS" in error_str):
+            print(f"{Fore.YELLOW}[!] Server requires TLS (received: {str(e).strip()}). Attempting FTPS connection...{Style.RESET_ALL}")
+            if ftp_connection and ftp_connection.sock:
+                try:
+                    ftp_connection.quit()
+                except ftplib.all_errors:
+                    pass
+            ftp_connection = None
+
+            try:
+                ftp_tls_conn = ftplib.FTP_TLS() 
+                ftp_tls_conn.connect(target_host, target_port, timeout=10)
+                ftp_tls_conn.auth()
+                ftp_tls_conn.prot_p()
+                banner = ftp_tls_conn.getwelcome()
+                print(f"{Fore.GREEN}[+] FTPS Banner: {Fore.WHITE}{banner.strip()}{Style.RESET_ALL}")
+                check_banner_vulnerabilities(banner)
+                ftp_connection = ftp_tls_conn
+                is_tls_connection = True
+            except ftplib.all_errors as tls_e:
+                print(f"{Fore.RED}[-] FTPS connection failed: {tls_e}{Style.RESET_ALL}")
+                if 'ftp_tls_conn' in locals() and ftp_tls_conn.sock:
+                    try:
+                        ftp_tls_conn.quit()
+                    except ftplib.all_errors:
+                        pass
+                return # Exit if FTPS fails
+            except socket.error as sock_e:
+                print(f"{Fore.RED}[-] FTPS socket error: {sock_e}{Style.RESET_ALL}")
+                if 'ftp_tls_conn' in locals() and ftp_tls_conn.sock:
+                    try:
+                        ftp_tls_conn.quit()
+                    except ftplib.all_errors:
+                        pass
+                return # Exit
+        else:
+            print(f"{Fore.RED}[-] Error during initial plain FTP connection: {e}{Style.RESET_ALL}")
+            if ftp_connection and ftp_connection.sock:
+                try:
+                    ftp_connection.quit()
+                except ftplib.all_errors:
+                    pass
+            ftp_connection = None
+            return
+    except socket.error as sock_e_plain:
+        print(f"{Fore.RED}[-] Plain FTP socket error: {sock_e_plain}{Style.RESET_ALL}")
+        if ftp_connection and ftp_connection.sock: # Check if ftp_connection was assigned
+            try:
+                ftp_connection.quit()
+            except ftplib.all_errors:
+                pass
+        ftp_connection = None
+        return
+    
+    if not ftp_connection or not ftp_connection.sock:
+        print(f"{Fore.RED}[-] Failed to establish any initial FTP connection.{Style.RESET_ALL}")
+        return
+
+    # Close the initial connection used for banner grabbing, as subsequent sections make fresh connections.
+    if ftp_connection and ftp_connection.sock:
+        try:
+            ftp_connection.quit()
+        except ftplib.all_errors:
+            pass
+    # ftp_connection = None # Ensure subsequent sections make new connections
+
+    # --- Anonymous Login ---
+    print(f"{Fore.CYAN}[*] Attempting Anonymous login...{Style.RESET_ALL}")
+    anon_ftp_conn = None
+    tried_tls_anon = False
+    while True:
+        try:
+            if is_tls_connection or tried_tls_anon:
+                anon_ftp_conn = ftplib.FTP_TLS()
+            else:
+                anon_ftp_conn = ftplib.FTP()
+            anon_ftp_conn.connect(target_host, target_port, timeout=10)
+            if is_tls_connection or tried_tls_anon:
+                anon_ftp_conn.auth()
+                anon_ftp_conn.prot_p()
+            try:
+                anon_ftp_conn.login("anonymous", "anonymous@example.com")
+                print(f"{Fore.GREEN}[+] Anonymous login successful!{Style.RESET_ALL}")
+                try:
+                    print(f"{Fore.CYAN}    Attempting to list directory contents (NLST):{Style.RESET_ALL}")
+                    listings = anon_ftp_conn.nlst()
+                    if listings:
+                        for item in listings[:5]: 
+                            print(f"      - {item}")
+                        if len(listings) > 5:
+                            print(f"      ... and {len(listings)-5} more items.")
+                    else:
+                        print(f"{Fore.YELLOW}    Directory listing empty or not permitted.{Style.RESET_ALL}")
+                except ftplib.all_errors as e_ls:
+                    print(f"{Fore.YELLOW}    Could not list directory contents: {e_ls}{Style.RESET_ALL}")
+                break  # Success, exit loop
+            except ftplib.all_errors as e_anon_login:
+                error_str = str(e_anon_login).upper()
+                if (not tried_tls_anon and "421" in str(e_anon_login) and ("TLS" in error_str or "SSL" in error_str or "SECURITY MECHANISMS" in error_str or "MUST NEGOTIATE" in error_str or "PLEASE RECONNECT USING TLS" in error_str)):
+                    print(f"{Fore.YELLOW}[!] Anonymous login: Server requires TLS. Retrying with FTPS...{Style.RESET_ALL}")
+                    tried_tls_anon = True
+                    if anon_ftp_conn and hasattr(anon_ftp_conn, 'sock') and anon_ftp_conn.sock:
+                        try:
+                            anon_ftp_conn.quit()
+                        except ftplib.all_errors:
+                            pass
+                    continue  # Retry with FTPS
+                print(f"{Fore.RED}[-] Anonymous login failed: {e_anon_login}{Style.RESET_ALL}")
+                break
+        except ftplib.all_errors as e_anon_setup:
+            print(f"{Fore.RED}[-] Error during anonymous login setup: {e_anon_setup}{Style.RESET_ALL}")
+            break
+        except socket.error as e_sock_anon:
+            print(f"{Fore.RED}[-] Socket error during anonymous login setup: {e_sock_anon}{Style.RESET_ALL}")
+            break
+        finally:
+            if anon_ftp_conn and hasattr(anon_ftp_conn, 'sock') and anon_ftp_conn.sock:
+                try:
+                    anon_ftp_conn.quit()
+                except ftplib.all_errors:
+                    pass
+
+    # --- Credentialed Login ---
+    print(f"{Fore.CYAN}[*] Attempting default credentials login...{Style.RESET_ALL}")
+    credentials_to_try = list(COMMON_FTP_CREDS)
+
+    if user_list_path and pass_list_path:
+        try:
+            with open(user_list_path, 'r') as uf, open(pass_list_path, 'r') as pf:
+                users = [line.strip() for line in uf if line.strip()]
+                passwords = [line.strip() for line in pf if line.strip()]
+            if users and passwords:
+                 print(f"{Fore.CYAN}    Loaded {len(users)} usernames and {len(passwords)} passwords from files.{Style.RESET_ALL}")
+                 custom_creds = []
+                 for u_cred_file in users:
+                     for p_cred_file in passwords:
+                         custom_creds.append((u_cred_file, p_cred_file))
+                 if custom_creds:
+                     credentials_to_try.extend(custom_creds)
+                     print(f"{Fore.CYAN}    Added {len(custom_creds)} custom credential pairs to test.{Style.RESET_ALL}")
+        except FileNotFoundError:
+            print(f"{Fore.RED}[-] Error: User or password list file not found. Using default credentials only.{Style.RESET_ALL}")
+        except Exception as e_file:
+            print(f"{Fore.RED}[-] Error reading credential files: {e_file}. Using default credentials only.{Style.RESET_ALL}")
+    elif user_list_path or pass_list_path:
+        print(f"{Fore.YELLOW}[!] Warning: Both --ftp-userlist and --ftp-passlist must be provided to use custom credential lists. Using default credentials.{Style.RESET_ALL}")
+
+    found_creds = False
+    for user_cred, passwd_cred in credentials_to_try:
+        cred_ftp_conn = None
+        tried_tls_cred = False
+        while True:
+            try:
+                if is_tls_connection or tried_tls_cred:
+                    cred_ftp_conn = ftplib.FTP_TLS()
+                else:
+                    cred_ftp_conn = ftplib.FTP()
+                cred_ftp_conn.connect(target_host, target_port, timeout=5)
+                if is_tls_connection or tried_tls_cred:
+                    cred_ftp_conn.auth()
+                    cred_ftp_conn.prot_p()
+                cred_ftp_conn.login(user_cred, passwd_cred)
+                print(f"{Fore.GREEN}[+] SUCCESSFUL LOGIN with {Fore.YELLOW}{user_cred}:{passwd_cred}{Style.RESET_ALL}")
+                found_creds = True
+                try:
+                    print(f"{Fore.CYAN}        Attempting to list directory contents (NLST):{Style.RESET_ALL}")
+                    listings = cred_ftp_conn.nlst()
+                    if listings:
+                        for item in listings[:5]:
+                            print(f"          - {item}")
+                        if len(listings) > 5:
+                            print(f"          ... and {len(listings)-5} more items.")
+                    else:
+                        print(f"{Fore.YELLOW}        Directory listing empty or not permitted.{Style.RESET_ALL}")
+                except ftplib.all_errors as e_ls_cred:
+                    print(f"{Fore.YELLOW}        Could not list directory contents: {e_ls_cred}{Style.RESET_ALL}")
+                break  # Success, exit retry loop
+            except ftplib.error_perm:
+                pass
+            except ftplib.all_errors as e_cred:
+                print(f"{Fore.RED}[-] FTP Error with {user_cred}:{passwd_cred} -> {e_cred}{Style.RESET_ALL}")
+                error_msg_cred = str(e_cred).lower()
+                if (not tried_tls_cred and "421" in str(e_cred) and ("tls" in error_msg_cred or "ssl" in error_msg_cred or "security mechanisms" in error_msg_cred or "must negotiate" in error_msg_cred or "please reconnect using tls" in error_msg_cred)):
+                    print(f"{Fore.YELLOW}[!] Credential login: Server requires TLS. Retrying with FTPS...{Style.RESET_ALL}")
+                    tried_tls_cred = True
+                    if cred_ftp_conn and hasattr(cred_ftp_conn, 'sock') and cred_ftp_conn.sock:
+                        try:
+                            cred_ftp_conn.quit()
+                        except ftplib.all_errors:
+                            pass
+                    continue  # Retry with FTPS
+                if (
+                    isinstance(e_cred, (socket.error, ConnectionRefusedError, ftplib.error_temp))
+                    or "authentication not enabled" in error_msg_cred
+                    or "explicit tls is required" in error_msg_cred
+                    or "session is shutdown" in error_msg_cred
+                ):
+                    print(f"{Fore.RED}[-] Connection/config error ({e_cred}), stopping further credential attempts for this host.{Style.RESET_ALL}")
+                    break
+            except socket.error as e_sock_cred:
+                print(f"{Fore.RED}[-] Socket error with {user_cred}:{passwd_cred} -> {e_sock_cred}{Style.RESET_ALL}")
+                print(f"{Fore.RED}[-] Connection error, stopping further credential attempts for this host.{Style.RESET_ALL}")
+                break
+            finally:
+                if cred_ftp_conn and hasattr(cred_ftp_conn, 'sock') and cred_ftp_conn.sock:
+                    try:
+                        cred_ftp_conn.quit()
+                    except ftplib.all_errors:
+                        pass
+            break  # Only retry once per credential
+    
+    if not found_creds and credentials_to_try: 
+        print(f"{Fore.YELLOW}[-] No default credentials worked.{Style.RESET_ALL}")
+    elif not credentials_to_try:
+        print(f"{Fore.YELLOW}[-] No credentials were available to test.{Style.RESET_ALL}")
+
+if __name__ == "__main__":
+
+    if args.ftp_scan:
+        target_parts = args.ftp_scan.split(':')
+        ftp_host = target_parts[0]
+        ftp_port = DEFAULT_FTP_PORT
+        if len(target_parts) > 1:
+            try:
+                ftp_port = int(target_parts[1])
+            except ValueError:
+                print(f"{Fore.RED}[-] Invalid port specified for FTP: {target_parts[1]}. Using default port {DEFAULT_FTP_PORT}.{Style.RESET_ALL}")
         
+        scan_ftp(ftp_host, ftp_port, args.ftp_userlist, args.ftp_passlist)
+
+action_taken = any(vars(args).values()) 
+if not action_taken and not args.update: 
+    action_args_present = False
+    for arg_name, arg_value in vars(args).items():
+        if arg_value and arg_name not in ['save', 'wordlist', 'threads', 'verbose', 'concurrency', 'shodan_api', 'proxy', 'proxy_file', 'heapdump', 'output_dir', 'token', 'save_ranges', 'forbidden_domains', 'ports', 'depth', 'extensions', 'exclude', 'update', 'shodan_api', 'ftp_scan', 'ftp_userlist', 'ftp_passlist']: # Add other non-action args here
+            if getattr(parser_groups_actions.get(arg_name, {}), 'is_action_arg', True): # Hypothetical way to mark action args
+                 action_taken = True
+                 break
+    

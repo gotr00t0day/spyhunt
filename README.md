@@ -393,3 +393,15 @@ SSRF Params
 ```
 python3 spyhunt.py --ssrfparams links.txt
 ```
+FTP Scan
+```
+python3 spyhunt.py -fs domain.com
+```
+FTP Scan with a port
+```
+python3 spyhunt.py -fs domain.com:2121
+```
+FTP Scan with userlist and passlist
+```
+python3 spyhunt.py -fs domain.com --ftp-userlist usernames.txt --ftp-passlist passwords.txt
+```
