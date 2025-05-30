@@ -63,6 +63,7 @@ from threading import Lock
 from tqdm import tqdm
 from itertools import cycle
 import ftplib # Add this import
+import socks  # PySocks
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -410,6 +411,9 @@ ftp_group.add_argument('--ftp-userlist',
 ftp_group.add_argument('--ftp-passlist',
                     type=str, help='Path to a custom password list for FTP bruteforcing',
                     metavar='passwords.txt')
+ftp_group.add_argument('--ftp-proxylist',
+                    type=str, help='Path to a proxy list for FTP bruteforcing (format: socks5://host:port, socks4://host:port, http://host:port, or just IP:PORT for SOCKS5; only working proxies will be used automatically)',
+                    metavar='proxies.txt')
 
 args = parser.parse_args()
 
@@ -4544,8 +4548,43 @@ def check_banner_vulnerabilities(banner):
         print(f"{Fore.YELLOW}    Suggestion: Could not reliably parse software/version. Manually check the full banner against vulnerability databases.{Style.RESET_ALL}")
 
 
-def scan_ftp(target_host, target_port=DEFAULT_FTP_PORT, user_list_path=None, pass_list_path=None):
+def scan_ftp(target_host, target_port=DEFAULT_FTP_PORT, user_list_path=None, pass_list_path=None, proxy_list_path=None):
     print(f"{Fore.MAGENTA}[+] Starting FTP Scan on {Fore.CYAN}{target_host}:{target_port}{Style.RESET_ALL}")
+
+    # --- Proxy List Setup ---
+    proxies = []
+    proxy_idx = 0
+    orig_socket = socket.socket
+    def set_proxy(proxy_url):
+        import re
+        socks.set_default_proxy(None)
+        socket.socket = orig_socket  # Reset first
+        if not proxy_url:
+            return
+        # If no protocol, default to socks5://
+        if not re.match(r'^(socks5|socks4|http)://', proxy_url.strip(), re.I):
+            proxy_url = f'socks5://{proxy_url.strip()}'
+        m = re.match(r'^(socks5|socks4|http)://([\w\.-]+):(\d+)$', proxy_url.strip(), re.I)
+        if not m:
+            print(f"{Fore.YELLOW}[!] Invalid proxy format: {proxy_url} (skipping proxy){Style.RESET_ALL}")
+            return
+        ptype, host, port = m.group(1).lower(), m.group(2), int(m.group(3))
+        proxy_type_map = {'socks5': socks.SOCKS5, 'socks4': socks.SOCKS4, 'http': socks.HTTP}
+        socks.set_default_proxy(proxy_type_map[ptype], host, port)
+        socket.socket = socks.socksocket
+        print(f"{Fore.CYAN}[*] Using proxy: {proxy_url}{Style.RESET_ALL}")
+
+    # Always filter for working proxies if a proxy list is provided
+    if proxy_list_path and os.path.exists(proxy_list_path):
+        print(f"{Fore.CYAN}[*] Testing proxies and using only working ones for FTP scan...{Style.RESET_ALL}")
+        proxies = load_proxies(proxy_list_path, test=True, max_workers=50)
+        if proxies:
+            print(f"{Fore.CYAN}[*] Loaded {len(proxies)} working proxies for FTP scan.{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.YELLOW}[!] No working proxies found in the list. Falling back to direct connection only.{Style.RESET_ALL}")
+            proxies = [None]
+    else:
+        proxies = [None]  # Direct connection only
 
     ftp_connection = None
     is_tls_connection = False
@@ -4711,10 +4750,12 @@ def scan_ftp(target_host, target_port=DEFAULT_FTP_PORT, user_list_path=None, pas
 
     found_creds = False
     for user_cred, passwd_cred in credentials_to_try:
-        cred_ftp_conn = None
-        tried_tls_cred = False
-        while True:
+        proxy_attempts = 0
+        while proxy_attempts < len(proxies):
+            cred_ftp_conn = None
+            tried_tls_cred = False
             try:
+                set_proxy(proxies[proxy_idx])
                 if is_tls_connection or tried_tls_cred:
                     cred_ftp_conn = ftplib.FTP_TLS()
                 else:
@@ -4738,41 +4779,36 @@ def scan_ftp(target_host, target_port=DEFAULT_FTP_PORT, user_list_path=None, pas
                         print(f"{Fore.YELLOW}        Directory listing empty or not permitted.{Style.RESET_ALL}")
                 except ftplib.all_errors as e_ls_cred:
                     print(f"{Fore.YELLOW}        Could not list directory contents: {e_ls_cred}{Style.RESET_ALL}")
-                break  # Success, exit retry loop
+                break  # Success, exit proxy loop
             except ftplib.error_perm:
-                pass
+                break  # Permission error, don't retry with other proxies
             except ftplib.all_errors as e_cred:
                 print(f"{Fore.RED}[-] FTP Error with {user_cred}:{passwd_cred} -> {e_cred}{Style.RESET_ALL}")
                 error_msg_cred = str(e_cred).lower()
-                if (not tried_tls_cred and "421" in str(e_cred) and ("tls" in error_msg_cred or "ssl" in error_msg_cred or "security mechanisms" in error_msg_cred or "must negotiate" in error_msg_cred or "please reconnect using tls" in error_msg_cred)):
-                    print(f"{Fore.YELLOW}[!] Credential login: Server requires TLS. Retrying with FTPS...{Style.RESET_ALL}")
-                    tried_tls_cred = True
-                    if cred_ftp_conn and hasattr(cred_ftp_conn, 'sock') and cred_ftp_conn.sock:
-                        try:
-                            cred_ftp_conn.quit()
-                        except ftplib.all_errors:
-                            pass
-                    continue  # Retry with FTPS
-                if (
-                    isinstance(e_cred, (socket.error, ConnectionRefusedError, ftplib.error_temp))
-                    or "authentication not enabled" in error_msg_cred
-                    or "explicit tls is required" in error_msg_cred
-                    or "session is shutdown" in error_msg_cred
-                ):
-                    print(f"{Fore.RED}[-] Connection/config error ({e_cred}), stopping further credential attempts for this host.{Style.RESET_ALL}")
-                    break
+                if (isinstance(e_cred, (socket.error, ConnectionRefusedError, ftplib.error_temp)) or
+                    "timed out" in error_msg_cred or "connection refused" in error_msg_cred or
+                    "authentication not enabled" in error_msg_cred or "explicit tls is required" in error_msg_cred or "session is shutdown" in error_msg_cred):
+                    print(f"{Fore.YELLOW}[!] Proxy {proxy_idx+1}/{len(proxies)} failed, rotating proxy and retrying...{Style.RESET_ALL}")
+                    proxy_attempts += 1
+                    next_proxy()
+                    continue  # Try next proxy for same credential
+                break  # Other errors, don't retry
             except socket.error as e_sock_cred:
                 print(f"{Fore.RED}[-] Socket error with {user_cred}:{passwd_cred} -> {e_sock_cred}{Style.RESET_ALL}")
-                print(f"{Fore.RED}[-] Connection error, stopping further credential attempts for this host.{Style.RESET_ALL}")
-                break
+                print(f"{Fore.YELLOW}[!] Proxy {proxy_idx+1}/{len(proxies)} failed, rotating proxy and retrying...{Style.RESET_ALL}")
+                proxy_attempts += 1
+                next_proxy()
+                continue
             finally:
                 if cred_ftp_conn and hasattr(cred_ftp_conn, 'sock') and cred_ftp_conn.sock:
                     try:
                         cred_ftp_conn.quit()
                     except ftplib.all_errors:
                         pass
-            break  # Only retry once per credential
-    
+            break  # Only retry once per proxy per credential
+    # Reset socket after scan
+    socks.set_default_proxy(None)
+    socket.socket = orig_socket
     if not found_creds and credentials_to_try: 
         print(f"{Fore.YELLOW}[-] No default credentials worked.{Style.RESET_ALL}")
     elif not credentials_to_try:
@@ -4790,7 +4826,17 @@ if __name__ == "__main__":
             except ValueError:
                 print(f"{Fore.RED}[-] Invalid port specified for FTP: {target_parts[1]}. Using default port {DEFAULT_FTP_PORT}.{Style.RESET_ALL}")
         
-        scan_ftp(ftp_host, ftp_port, args.ftp_userlist, args.ftp_passlist)
+        scan_ftp(ftp_host, ftp_port, args.ftp_userlist, args.ftp_passlist, getattr(args, 'ftp_proxylist', None))
+
+    # Filter proxies if requested
+    if getattr(args, "ftp_proxylist", None) and getattr(args, "filter_proxies", False):
+        working = load_proxies(args.ftp_proxylist, test=True, max_workers=50)
+        out_path = "payloads/working_proxies.txt"
+        with open(out_path, "w") as f:
+            for proxy in working:
+                f.write(f"{proxy}\n")
+        print(f"{Fore.GREEN}Saved {len(working)} working proxies to {out_path}{Style.RESET_ALL}")
+        exit(0)
 
 action_taken = any(vars(args).values()) 
 if not action_taken and not args.update: 
@@ -4800,4 +4846,4 @@ if not action_taken and not args.update:
             if getattr(parser_groups_actions.get(arg_name, {}), 'is_action_arg', True): # Hypothetical way to mark action args
                  action_taken = True
                  break
-    
+        
