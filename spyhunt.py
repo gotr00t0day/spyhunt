@@ -3145,7 +3145,7 @@ if args.autorecon:
             parsed_url = urlparse(link)
             query_params = parse_qs(parsed_url.query)
             if query_params:
-                parameters[link] = query_args
+                parameters[link] = query_params
         return parameters
 
     def shodan_search(target, api):
