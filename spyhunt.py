@@ -63,8 +63,32 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from tqdm import tqdm
 from itertools import cycle
-import ftplib # Add this import
+import ftplib
 import socks  # PySocks
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Import new security modules
+from modules.security_utils import (
+    validate_domain,
+    validate_ip,
+    validate_url,
+    validate_port,
+    validate_file_path,
+    execute_command,
+    InputValidator,
+    SecureHTTPSession,
+    RateLimiter,
+    SecretDetector,
+    SecurityError
+)
+from modules.advanced_scanners import (
+    XXEScanner,
+    SSRFScanner,
+    SSTIScanner,
+    NoSQLInjectionScanner,
+    CRLFScanner
+)
 
 
 warnings.filterwarnings(action='ignore',module='bs4')
@@ -83,7 +107,7 @@ banner = f"""
 ░ ░▒  ░ ░░▒ ░     ▓██ ░▒░  ▒ ░▒░ ░░░▒░ ░ ░ ░ ░░   ░ ▒░    ░    
 ░  ░  ░  ░░       ▒ ▒ ░░   ░  ░░ ░ ░░░ ░ ░    ░   ░ ░   ░      
       ░           ░ ░      ░  ░  ░   ░              ░         
-{Fore.WHITE}V 3.4
+{Fore.WHITE}V 4.0
 {Fore.WHITE}By c0deninja
 {Fore.RESET}
 """
@@ -92,17 +116,32 @@ print(Fore.MAGENTA + banner)
 print(Fore.WHITE)
 
 def commands(cmd):
+    """Execute command safely without shell injection"""
     try:
-        subprocess.check_call(cmd, shell=True)
-    except:
-        pass
+        result = execute_command(cmd, timeout=300, check=False)
+        return result
+    except subprocess.SubprocessError as e:
+        if 'logger' in globals():
+            logger.error(f"Command execution failed: {e}")
+        return None
+    except Exception as e:
+        if 'logger' in globals():
+            logger.error(f"Unexpected error in command execution: {e}")
+        return None
 
 def scan(command: str) -> str:
-    cmd = command
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out, err = p.communicate()
-    out = out.decode() 
-    return out
+    """Execute scan command safely"""
+    try:
+        result = execute_command(command, timeout=300, check=False)
+        return result.stdout if result else ""
+    except subprocess.SubprocessError as e:
+        if 'logger' in globals():
+            logger.error(f"Scan command failed: {e}")
+        return ""
+    except Exception as e:
+        if 'logger' in globals():
+            logger.error(f"Unexpected error in scan: {e}")
+        return ""
 
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
@@ -387,6 +426,31 @@ vuln_group.add_argument('-zt', '--zone-transfer',
 # Extract SSRF Paremeters
 
 vuln_group.add_argument('-ssrfp', '--ssrfparams', type=str, help='Get SSRF parameters from a list of domains', metavar='domains.txt')
+
+# New Advanced Vulnerability Scanners
+vuln_group.add_argument('--xxe', '--xxe_scan',
+                    type=str, help='Scan for XXE (XML External Entity) vulnerabilities',
+                    metavar='https://example.com/api/xml')
+
+vuln_group.add_argument('--ssrf', '--ssrf_scan',
+                    type=str, help='Scan for SSRF (Server-Side Request Forgery) vulnerabilities',
+                    metavar='https://example.com/api?url=test')
+
+vuln_group.add_argument('--ssti', '--ssti_scan',
+                    type=str, help='Scan for SSTI (Server-Side Template Injection) vulnerabilities',
+                    metavar='https://example.com/page?template=test')
+
+vuln_group.add_argument('--nosqli', '--nosql_scan',
+                    type=str, help='Scan for NoSQL injection vulnerabilities',
+                    metavar='https://example.com/api?id=test')
+
+vuln_group.add_argument('--crlf', '--crlf_scan',
+                    type=str, help='Scan for CRLF injection vulnerabilities',
+                    metavar='https://example.com/redirect?url=test')
+
+parser.add_argument('--callback-url',
+                    type=str, help='Callback URL for out-of-band vulnerability testing',
+                    metavar='http://your-server.com')
                     
                                        
 # Add to argument groups
@@ -427,8 +491,62 @@ auto_smb_group.add_argument('--smb-user', type=str, help='Username for credentia
 auto_smb_group.add_argument('--smb-pass', type=str, help='Password for credential testing')
 auto_smb_group.add_argument('--smb-domain', type=str, help='Domain for credential testing', default='')
 
+# Security options
+parser.add_argument('--insecure', action='store_true',
+                   help='Disable SSL certificate verification (insecure, not recommended)')
 
 args = parser.parse_args()
+
+# Setup logging system
+def setup_logging(log_level="INFO"):
+    """Configure structured logging"""
+    log_file = "spyhunt.log"
+    
+    logger = logging.getLogger('spyhunt')
+    logger.setLevel(getattr(logging, log_level.upper()))
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_format = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    console_handler.setFormatter(console_format)
+    
+    # File handler with rotation
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10*1024*1024, backupCount=5
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_format = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    )
+    file_handler.setFormatter(file_format)
+    
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    
+    return logger
+
+# Initialize logger
+log_level = "DEBUG" if args.verbose else "INFO"
+logger = setup_logging(log_level)
+logger.info("SpyHunt v4.0 started")
+
+if args.insecure:
+    logger.warning("SSL verification is DISABLED - this is insecure!")
+
+# Initialize secure HTTP session
+verify_ssl = not args.insecure
+http_session = SecureHTTPSession(
+    max_retries=3,
+    pool_connections=50,
+    pool_maxsize=100,
+    verify_ssl=verify_ssl,
+    timeout=10
+)
+logger.info(f"HTTP session initialized (SSL verify: {verify_ssl})")
 
 # Add new function for IP info scanning
 def scan_ip_info(target, token):
@@ -5020,3 +5138,249 @@ if args.smb_auto:
         smb_pass=getattr(args, 'smb_pass', None),
         smb_domain=getattr(args, 'smb_domain', '')
     )
+
+# ============================================================================
+# NEW ADVANCED VULNERABILITY SCANNERS
+# ============================================================================
+
+# XXE Scanner
+if args.xxe:
+    try:
+        validated_url = validate_url(args.xxe)
+        logger.info(f"Starting XXE vulnerability scan on {validated_url}")
+        
+        print(f"{Fore.CYAN}[*] Starting XXE vulnerability scan{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}[*] Target: {validated_url}{Style.RESET_ALL}\n")
+        
+        callback_url = args.callback_url or "http://attacker.com"
+        scanner = XXEScanner(callback_url=callback_url)
+        findings = scanner.scan(validated_url)
+        
+        if findings:
+            print(f"{Fore.RED}[!] XXE vulnerabilities found: {len(findings)}{Style.RESET_ALL}\n")
+            for finding in findings:
+                print(f"{Fore.RED}[VULNERABLE] XXE Detected{Style.RESET_ALL}")
+                print(f"  URL: {finding['url']}")
+                print(f"  Type: {finding['payload_type']}")
+                print(f"  Severity: {finding['severity'].upper()}")
+                print(f"  Evidence: {finding['evidence'][:200]}...")
+                print()
+                logger.critical(f"XXE vulnerability: {finding['url']} ({finding['payload_type']})")
+                
+            if args.save:
+                with open(args.save, 'w') as f:
+                    json.dump(findings, f, indent=2)
+                print(f"{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+                logger.info(f"XXE findings saved to {args.save}")
+        else:
+            print(f"{Fore.GREEN}[+] No XXE vulnerabilities found{Style.RESET_ALL}")
+            logger.info("No XXE vulnerabilities detected")
+            
+    except (ValueError, SecurityError) as e:
+        logger.error(f"Invalid input for XXE scan: {e}")
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"XXE scan failed: {e}")
+        print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+
+# SSRF Scanner
+if args.ssrf:
+    try:
+        validated_url = validate_url(args.ssrf)
+        logger.info(f"Starting SSRF vulnerability scan on {validated_url}")
+        
+        print(f"{Fore.CYAN}[*] Starting SSRF vulnerability scan{Style.RESET_ALL}\n")
+        
+        # Extract parameters from URL
+        parsed = urlparse(validated_url)
+        params = parse_qs(parsed.query)
+        
+        if not params:
+            print(f"{Fore.YELLOW}[!] No parameters found in URL{Style.RESET_ALL}")
+            logger.warning("No parameters found for SSRF testing")
+            sys.exit(1)
+        
+        callback_domain = args.callback_url.replace('http://', '').replace('https://', '') if args.callback_url else "attacker.com"
+        scanner = SSRFScanner(callback_domain=callback_domain)
+        
+        all_findings = []
+        for param in params:
+            print(f"{Fore.CYAN}[*] Testing parameter: {param}{Style.RESET_ALL}")
+            findings = scanner.scan(validated_url, param)
+            all_findings.extend(findings)
+        
+        if all_findings:
+            print(f"\n{Fore.RED}[!] SSRF vulnerabilities found: {len(all_findings)}{Style.RESET_ALL}\n")
+            for finding in all_findings:
+                print(f"{Fore.RED}[VULNERABLE] SSRF Detected{Style.RESET_ALL}")
+                print(f"  URL: {finding['url']}")
+                print(f"  Parameter: {finding['param']}")
+                print(f"  Payload Type: {finding['payload_type']}")
+                print(f"  Severity: {finding['severity'].upper()}")
+                print()
+                logger.critical(f"SSRF vulnerability: {finding['url']} param={finding['param']}")
+            
+            if args.save:
+                with open(args.save, 'w') as f:
+                    json.dump(all_findings, f, indent=2)
+                print(f"{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}[+] No SSRF vulnerabilities found{Style.RESET_ALL}")
+            
+    except (ValueError, SecurityError) as e:
+        logger.error(f"Invalid input for SSRF scan: {e}")
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"SSRF scan failed: {e}")
+        print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+
+# SSTI Scanner
+if args.ssti:
+    try:
+        validated_url = validate_url(args.ssti)
+        logger.info(f"Starting SSTI vulnerability scan on {validated_url}")
+        
+        print(f"{Fore.CYAN}[*] Starting SSTI vulnerability scan{Style.RESET_ALL}\n")
+        
+        parsed = urlparse(validated_url)
+        params = parse_qs(parsed.query)
+        
+        if not params:
+            print(f"{Fore.YELLOW}[!] No parameters found in URL{Style.RESET_ALL}")
+            logger.warning("No parameters found for SSTI testing")
+            sys.exit(1)
+        
+        scanner = SSTIScanner()
+        
+        all_findings = []
+        for param in params:
+            print(f"{Fore.CYAN}[*] Testing parameter: {param}{Style.RESET_ALL}")
+            findings = scanner.scan(validated_url, param)
+            all_findings.extend(findings)
+        
+        if all_findings:
+            print(f"\n{Fore.RED}[!] SSTI vulnerabilities found: {len(all_findings)}{Style.RESET_ALL}\n")
+            for finding in all_findings:
+                print(f"{Fore.RED}[VULNERABLE] SSTI Detected{Style.RESET_ALL}")
+                print(f"  URL: {finding['url']}")
+                print(f"  Parameter: {finding['param']}")
+                print(f"  Template Engine: {finding['template_engine']}")
+                print(f"  Test Type: {finding['test_type']}")
+                print(f"  Severity: {finding['severity'].upper()}")
+                print(f"  Evidence: {finding['evidence']}")
+                print()
+                logger.critical(f"SSTI vulnerability: {finding['url']} engine={finding['template_engine']}")
+            
+            if args.save:
+                with open(args.save, 'w') as f:
+                    json.dump(all_findings, f, indent=2)
+                print(f"{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}[+] No SSTI vulnerabilities found{Style.RESET_ALL}")
+            
+    except (ValueError, SecurityError) as e:
+        logger.error(f"Invalid input for SSTI scan: {e}")
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"SSTI scan failed: {e}")
+        print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+
+# NoSQL Injection Scanner
+if args.nosqli:
+    try:
+        validated_url = validate_url(args.nosqli)
+        logger.info(f"Starting NoSQL injection scan on {validated_url}")
+        
+        print(f"{Fore.CYAN}[*] Starting NoSQL injection scan{Style.RESET_ALL}\n")
+        
+        parsed = urlparse(validated_url)
+        params = parse_qs(parsed.query)
+        
+        if not params:
+            print(f"{Fore.YELLOW}[!] No parameters found in URL{Style.RESET_ALL}")
+            logger.warning("No parameters found for NoSQL injection testing")
+            sys.exit(1)
+        
+        scanner = NoSQLInjectionScanner()
+        
+        all_findings = []
+        for param in params:
+            print(f"{Fore.CYAN}[*] Testing parameter: {param}{Style.RESET_ALL}")
+            findings = scanner.scan(validated_url, param)
+            all_findings.extend(findings)
+        
+        if all_findings:
+            print(f"\n{Fore.RED}[!] NoSQL injection vulnerabilities found: {len(all_findings)}{Style.RESET_ALL}\n")
+            for finding in all_findings:
+                print(f"{Fore.RED}[VULNERABLE] NoSQL Injection Detected{Style.RESET_ALL}")
+                print(f"  URL: {finding['url']}")
+                print(f"  Parameter: {finding['param']}")
+                print(f"  Database Type: {finding['db_type']}")
+                print(f"  Payload Type: {finding['payload_type']}")
+                print(f"  Severity: {finding['severity'].upper()}")
+                print(f"  Evidence: {finding['evidence'][:200]}")
+                print()
+                logger.critical(f"NoSQL injection: {finding['url']} db={finding['db_type']}")
+            
+            if args.save:
+                with open(args.save, 'w') as f:
+                    json.dump(all_findings, f, indent=2)
+                print(f"{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}[+] No NoSQL injection vulnerabilities found{Style.RESET_ALL}")
+            
+    except (ValueError, SecurityError) as e:
+        logger.error(f"Invalid input for NoSQL scan: {e}")
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"NoSQL scan failed: {e}")
+        print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+
+# CRLF Injection Scanner
+if args.crlf:
+    try:
+        validated_url = validate_url(args.crlf)
+        logger.info(f"Starting CRLF injection scan on {validated_url}")
+        
+        print(f"{Fore.CYAN}[*] Starting CRLF injection scan{Style.RESET_ALL}\n")
+        
+        scanner = CRLFScanner()
+        findings = scanner.scan(validated_url)
+        
+        if findings:
+            print(f"\n{Fore.RED}[!] CRLF injection vulnerabilities found: {len(findings)}{Style.RESET_ALL}\n")
+            for finding in findings:
+                print(f"{Fore.RED}[VULNERABLE] CRLF Injection Detected{Style.RESET_ALL}")
+                print(f"  URL: {finding['url']}")
+                print(f"  Parameter: {finding['param']}")
+                print(f"  Payload Type: {finding['payload_type']}")
+                print(f"  Severity: {finding['severity'].upper()}")
+                print(f"  Evidence: {finding['evidence']}")
+                print()
+                logger.critical(f"CRLF injection: {finding['url']} param={finding['param']}")
+            
+            if args.save:
+                with open(args.save, 'w') as f:
+                    json.dump(findings, f, indent=2)
+                print(f"{Fore.GREEN}Results saved to {args.save}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}[+] No CRLF injection vulnerabilities found{Style.RESET_ALL}")
+            
+    except (ValueError, SecurityError) as e:
+        logger.error(f"Invalid input for CRLF scan: {e}")
+        print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"CRLF scan failed: {e}")
+        print(f"{Fore.RED}Unexpected error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
+
+logger.info("SpyHunt execution completed")

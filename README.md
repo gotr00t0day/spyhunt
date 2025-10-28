@@ -2,7 +2,23 @@
 
 ![Spyhunt](https://github.com/gotr00t0day/spyhunt/blob/main/spyhunt_logo_cropped.png)
 
-Spyhunt is comprehensive network scanning and vulnerability assessment tool. This tool is designed for security professionals and penetration testers to perform comprehensive reconnaissance and vulnerability assessment on target networks and web applications. It combines multiple scanning techniques and integrates various external tools to provide a wide range of information about the target.
+**SpyHunt v4.0 (Security Hardened)** - A comprehensive network scanning and vulnerability assessment tool designed for security professionals and penetration testers. This tool performs comprehensive reconnaissance and vulnerability assessment on target networks and web applications, combining multiple scanning techniques with various external tools to provide extensive security intelligence.
+
+## 🆕 What's New in v4.0
+
+### **5 New Advanced Vulnerability Scanners**
+- ✅ **XXE Scanner** - XML External Entity injection detection
+- ✅ **SSRF Scanner** - Server-Side Request Forgery detection  
+- ✅ **SSTI Scanner** - Server-Side Template Injection (Jinja2, Twig, Freemarker, Velocity, ERB, Smarty)
+- ✅ **NoSQL Injection Scanner** - MongoDB and CouchDB injection detection
+- ✅ **CRLF Scanner** - HTTP header injection detection
+
+### **Security Enhancements**
+- ✅ **Command Injection Protection** - Secure command execution prevents shell injection attacks
+- ✅ **SSL Verification Control** - SSL certificate verification enabled by default (use `--insecure` to disable)
+- ✅ **Structured Logging** - All operations logged to `spyhunt.log` with rotation
+- ✅ **Input Validation** - Comprehensive validation prevents injection attacks
+- ✅ **HTTP Session Management** - Connection pooling and automatic retries for better performance
 
 ## Here's a high-level overview of its functionality
 
@@ -11,39 +27,64 @@ Spyhunt is comprehensive network scanning and vulnerability assessment tool. Thi
 2. The script defines a colorful banner and sets up command-line argument parsing for different scanning options.
 
 3. It includes multiple scanning functions for different purposes:
+   
+   **🆕 Advanced Vulnerability Scanners (v4.0)**
+   - **XXE (XML External Entity) Injection** - File disclosure, SSRF via XXE, AWS metadata exposure
+   - **SSRF (Server-Side Request Forgery)** - Internal network probing, cloud metadata endpoints, bypass techniques
+   - **SSTI (Server-Side Template Injection)** - Jinja2, Twig, Freemarker, Velocity, ERB, Smarty detection
+   - **NoSQL Injection** - MongoDB and CouchDB authentication bypass and injection
+   - **CRLF Injection** - HTTP header injection, response smuggling, XSS via CRLF
+   
+   **Reconnaissance & Information Gathering**
    - Subdomain enumeration
    - Technology detection
    - DNS record scanning
    - Web crawling and URL extraction
    - Favicon hash calculation
-   - Host header injection testing
-   - Security header analysis
+   - IP address extraction
+   - Domain information gathering
+   - Shodan integration for additional recon
    - Network vulnerability analysis
    - Wayback machine URL retrieval
    - JavaScript file discovery
-   - Broken link checking
-   - HTTP request smuggling detection
-   - IP address extraction
-   - Domain information gathering
-   - API endpoint fuzzing
-   - Shodan integration for additional recon
-   - 403 Forbidden bypass attempts
-   - Directory and file brute-forcing
-   - Local File Inclusion (LFI) scanning with Nuclei
-   - Google dorking
-   - Directory Traversal
+   - Port Scanning & CIDR Notation Scanning
+   
+   **Vulnerability Detection**
    - SQL Injection
-   - XSS
+   - XSS (Cross-Site Scripting)
+   - Host header injection testing
+   - CORS misconfiguration
+   - HTTP request smuggling detection
    - Subdomain Takeover
-   - Web Server Detection
-   - JavaScript file scanning for sensitive info
-   - Auto Recon
-   - Port Scanning
-   - CIDR Notation Scanning
-   - Custom Headers
-   - API Fuzzing
+   - Open Redirect
+   - Directory Traversal
+   - Local File Inclusion (LFI) scanning with Nuclei
+   - 403 Forbidden bypass attempts
+   - Security header analysis
+   - JSON Web Token vulnerabilities
+   - Heap dump analysis
+   - DNS zone transfer
+   
+   **Fuzzing & Brute Forcing**
+   - Directory and file brute-forcing
+   - API endpoint fuzzing
+   - Parameter mining
+   - Login form brute-forcing
+   - FTP brute-forcing with proxy support
+   - SMB password spraying
+   
+   **Cloud Security**
    - AWS S3 Bucket Enumeration
-   - JSON Web Token Scanning
+   - Azure resource scanning
+   - GCP Storage scanning
+   
+   **Other Features**
+   - Custom Headers
+   - Google dorking
+   - Broken link checking
+   - Auto Recon
+   - JavaScript file scanning for sensitive info
+   - Web Server Detection
 
    
 4. The script uses multithreading and multiprocessing to perform scans efficiently.
@@ -158,6 +199,21 @@ Nuclei Scans:
                         use a nuclei template
 
 Vulnerability:
+  🆕 ADVANCED SCANNERS (v4.0):
+  --xxe, --xxe_scan https://example.com/api/xml
+                        Scan for XXE (XML External Entity) vulnerabilities
+  --ssrf, --ssrf_scan https://example.com/api?url=test
+                        Scan for SSRF (Server-Side Request Forgery) vulnerabilities
+  --ssti, --ssti_scan https://example.com/page?template=test
+                        Scan for SSTI (Server-Side Template Injection) vulnerabilities
+  --nosqli, --nosql_scan https://example.com/api?id=test
+                        Scan for NoSQL injection vulnerabilities
+  --crlf, --crlf_scan https://example.com/redirect?url=test
+                        Scan for CRLF injection vulnerabilities
+  --callback-url http://your-server.com
+                        Callback URL for out-of-band vulnerability testing
+  
+  STANDARD SCANNERS:
   -b, --brokenlinks domains.txt
                         search for broken links
   -ph, --pathhunt domain.txt
@@ -190,6 +246,9 @@ Vulnerability:
                         Test for DNS zone transfer vulnerability
   -ssrfp, --ssrfparams domains.txt
                         Get SSRF parameters from a list of domains
+
+Security Options:
+  --insecure            Disable SSL certificate verification (insecure, not recommended)
 
 Crawlers:
   -pspider, --paramspider domain.com
@@ -508,3 +567,192 @@ SMB Full Pentest (Credentials + Password Spray)
 ```
 python3 spyhunt.py --smb_auto --smb-target 10.129.228.111 --smb-user mhope --smb-pass "" --spray-userlist users.txt --spray-password "Welcome1"
 ```
+
+## 🆕 New Advanced Vulnerability Scanners (v4.0)
+
+### XXE (XML External Entity) Scanner
+Test for XXE vulnerabilities in XML endpoints:
+```bash
+# Basic XXE scan
+python3 spyhunt.py --xxe https://example.com/api/xml
+
+# With custom callback URL for out-of-band detection
+python3 spyhunt.py --xxe https://example.com/api/xml --callback-url http://your-server.com
+
+# Save results to file
+python3 spyhunt.py --xxe https://example.com/api/xml --save xxe_results.json
+
+# With verbose logging
+python3 spyhunt.py --xxe https://example.com/api/xml -v
+```
+
+**What it detects:**
+- Classic XXE with callback
+- Blind XXE
+- File disclosure (Linux: `/etc/passwd`, Windows: `win.ini`)
+- SSRF via XXE
+- AWS metadata exposure
+
+### SSRF (Server-Side Request Forgery) Scanner
+Test for SSRF vulnerabilities:
+```bash
+# Basic SSRF scan
+python3 spyhunt.py --ssrf "https://example.com/api?url=test"
+
+# With callback domain
+python3 spyhunt.py --ssrf "https://example.com/api?url=test" --callback-url http://your-domain.com
+
+# Save results
+python3 spyhunt.py --ssrf "https://example.com/fetch?url=test" --save ssrf_results.json
+```
+
+**What it detects:**
+- Internal network access (127.0.0.1, localhost, 0.0.0.0)
+- Cloud metadata endpoints (AWS, GCP, Azure, DigitalOcean, Oracle)
+- Bypass techniques (octal, hex, decimal encoding, DNS rebinding)
+- File disclosure via `file://` protocol
+- Port scanning via SSRF
+
+### SSTI (Server-Side Template Injection) Scanner
+Test for template injection vulnerabilities:
+```bash
+# Basic SSTI scan
+python3 spyhunt.py --ssti "https://example.com/page?template=test"
+
+# Multiple parameters
+python3 spyhunt.py --ssti "https://example.com/render?name=test&title=hello"
+
+# Save results
+python3 spyhunt.py --ssti "https://example.com/view?template=test" --save ssti_results.json
+```
+
+**Template engines detected:**
+- Jinja2 (Python/Flask)
+- Twig (PHP/Symfony)
+- Freemarker (Java)
+- Velocity (Java)
+- ERB (Ruby/Rails)
+- Smarty (PHP)
+
+### NoSQL Injection Scanner
+Test for NoSQL injection in MongoDB and CouchDB:
+```bash
+# Basic NoSQL injection scan
+python3 spyhunt.py --nosqli "https://example.com/api?id=test"
+
+# User authentication endpoint
+python3 spyhunt.py --nosqli "https://example.com/api/login?username=test&password=test"
+
+# Save results
+python3 spyhunt.py --nosqli "https://example.com/api/users?id=test" --save nosql_results.json
+```
+
+**What it detects:**
+- Authentication bypass
+- Operator injection (`$ne`, `$gt`, `$regex`, `$where`)
+- Time-based blind injection
+- JavaScript injection in MongoDB
+
+### CRLF Injection Scanner
+Test for HTTP header injection vulnerabilities:
+```bash
+# Basic CRLF scan
+python3 spyhunt.py --crlf "https://example.com/redirect?url=test"
+
+# Multiple URL parameters
+python3 spyhunt.py --crlf "https://example.com/page?ref=test&return=home"
+
+# Save results
+python3 spyhunt.py --crlf "https://example.com/goto?url=test" --save crlf_results.json
+```
+
+**What it detects:**
+- Set-Cookie header injection
+- Location header manipulation
+- HTTP response smuggling
+- XSS via CRLF injection
+
+### Security Features
+
+#### SSL Verification Control
+```bash
+# SSL verification ON by default (recommended)
+python3 spyhunt.py --xxe https://example.com/api/xml
+
+# Disable SSL verification for testing (not recommended for production)
+python3 spyhunt.py --xxe https://self-signed.local/api/xml --insecure
+```
+
+#### Logging
+All operations are automatically logged to `spyhunt.log`:
+```bash
+# Enable verbose logging
+python3 spyhunt.py --xxe https://example.com/api/xml --verbose
+
+# View logs in real-time
+tail -f spyhunt.log
+
+# Search logs
+grep "XXE vulnerability" spyhunt.log
+```
+
+### Bug Bounty Workflow Example
+```bash
+# 1. Enumerate subdomains
+python3 spyhunt.py -s target.com --save subdomains.txt
+
+# 2. Probe for live hosts
+python3 spyhunt.py -p subdomains.txt --save live_hosts.txt
+
+# 3. Run comprehensive vulnerability scans
+python3 spyhunt.py --xxe https://api.target.com/xml --save xxe_findings.json
+python3 spyhunt.py --ssrf "https://api.target.com/fetch?url=test" --save ssrf_findings.json
+python3 spyhunt.py --ssti "https://target.com/render?template=test" --save ssti_findings.json
+python3 spyhunt.py --nosqli "https://api.target.com/users?id=test" --save nosql_findings.json
+python3 spyhunt.py --crlf "https://target.com/redirect?url=test" --save crlf_findings.json
+
+# 4. Traditional vulnerability scans
+python3 spyhunt.py --xss "https://target.com/search?q=test"
+python3 spyhunt.py --sqli "https://target.com/product?id=1"
+python3 spyhunt.py -co live_hosts.txt
+```
+
+## Documentation
+
+For detailed information:
+- **NEW_FEATURES_README.md** - Quick start guide for v4.0 features
+- **INTEGRATION_COMPLETE.md** - Complete integration details
+- **SECURITY_ANALYSIS_REPORT.md** - Comprehensive security analysis
+- **WHAT_CHANGED.md** - Summary of changes from v3.4 to v4.0
+
+## Security Notes
+
+### Default Security Settings (v4.0)
+- ✅ SSL certificate verification is **enabled by default**
+- ✅ All operations are logged to `spyhunt.log`
+- ✅ Command injection protection is active
+- ✅ Input validation prevents injection attacks
+
+### Best Practices
+1. Always use SSL verification in production (`--insecure` only for testing)
+2. Review logs regularly for security events
+3. Save scan results with `--save` for documentation
+4. Use `--verbose` for detailed debugging
+5. Test on authorized targets only
+
+## Version History
+
+### v4.0 (Security Hardened) - October 2025
+- ➕ Added XXE Scanner
+- ➕ Added SSRF Scanner
+- ➕ Added SSTI Scanner
+- ➕ Added NoSQL Injection Scanner
+- ➕ Added CRLF Injection Scanner
+- 🔒 Fixed command injection vulnerabilities
+- 🔒 Added SSL verification control
+- 📝 Added structured logging system
+- ⚡ Added HTTP session management
+- 🛡️ Added input validation framework
+
+### v3.4 and earlier
+- See git history for previous changes
