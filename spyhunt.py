@@ -1369,13 +1369,35 @@ if args.dns:
 if args.probe:
     if args.save:
         print(Fore.CYAN + "Saving output to {}...".format(args.save))
-        commands(f'cat {args.probe} | httprobe -c 100 | anew >> {args.save}')
-        if path.exists(f"{args.save}"):
-            print(Fore.GREEN + "DONE!")
-        if not path.exists(f"{args.save}"):
-            print(Fore.RED + "ERROR!")
+        try:
+            # Use shell=True for pipeline commands
+            result = subprocess.run(
+                f'cat {args.probe} | httprobe -c 100 | anew >> {args.save}',
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if path.exists(f"{args.save}"):
+                print(Fore.GREEN + "DONE!")
+            else:
+                print(Fore.RED + "ERROR! File not created.")
+        except subprocess.TimeoutExpired:
+            logger.error("Probe command timed out")
+            print(Fore.RED + "ERROR! Command timed out.")
+        except Exception as e:
+            logger.error(f"Probe command failed: {e}")
+            print(Fore.RED + f"ERROR! {e}")
     else:
-        commands(f'sudo cat {args.probe} | httprobe | anew')    
+        try:
+            subprocess.run(
+                f'cat {args.probe} | httprobe | anew',
+                shell=True,
+                timeout=300
+            )
+        except Exception as e:
+            logger.error(f"Probe command failed: {e}")
+            print(Fore.RED + f"ERROR! {e}")    
 
 
 if args.redirects:
